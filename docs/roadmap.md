@@ -4,7 +4,7 @@
 
 ## 1일차: 시장 날씨 관통 (키 불필요)
 
-- [ ] pnpm 워크스페이스, `apps/web`(Next.js), `apps/api`(NestJS), `packages/contracts` 생성
+- [ ] pnpm 워크스페이스, `frontend`(Next.js), `backend`(NestJS), `packages/contracts` 생성
 - [ ] `docker-compose.yml`로 PostgreSQL, Prisma 초기화
 - [ ] `vendor/`에 claude-trading-skills, day-trader-skill 서브모듈 추가, 오늘 커밋으로 고정
 - [ ] `uv`로 ③용 Python 환경 구성

@@ -35,10 +35,10 @@ Atlas는 미국장이 끝난 뒤 자동으로 시장·섹터·내 종목을 분�
 ```bash
 pnpm install
 docker compose up -d          # PostgreSQL
-pnpm --filter api prisma migrate dev
-pnpm --filter api dev         # NestJS API
-pnpm --filter api worker      # 스케줄러 + 분석 워커
-pnpm --filter web dev         # Next.js
+pnpm --filter backend prisma migrate dev
+pnpm --filter backend dev         # NestJS API
+pnpm --filter backend worker      # 스케줄러 + 분석 워커
+pnpm --filter frontend dev         # Next.js
 ```
 
 ## 디자인 원칙
@@ -56,3 +56,8 @@ pnpm --filter web dev         # Next.js
 - 명령어는 사용자가 직접 터미널에서 실행하게 제안만 하고, 결과를 보고 다음으로 간다.
 - 파일을 만들거나 고치면 핵심 부분이 무슨 역할인지 설명한다.
 - 단계가 끝나면 바뀐 것과 배운 개념을 3줄로 정리한다.
+
+## 답변 머리말
+
+- 학습 모드 답변(개념 설명, 직접 해보기 안내)은 제목 앞에 `[학습]`을 붙인다.
+- 코드 작업 답변(파일 수정, 명령 실행 결과 보고)은 제목 앞에 `[code]`를 붙인다.

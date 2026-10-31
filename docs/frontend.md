@@ -125,7 +125,7 @@
 ## 폴더
 
 ```text
-apps/web/src/
+frontend/src/
 ├─ app/(main)/
 │  ├─ layout.tsx            # 상단 버튼, 하단 탭바
 │  ├─ page.tsx              # 홈

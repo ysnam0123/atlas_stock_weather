@@ -3,9 +3,9 @@
 분석은 워커가 미리 돌려 DB에 쌓고, 웹은 DB만 읽는다. 웹 요청 안에서 Python이나 Claude를 기다리지 않는다.
 
 ```text
-Next.js (apps/web) ──REST──> NestJS API (apps/api, main.ts) ──> PostgreSQL
+Next.js (frontend) ──REST──> NestJS API (backend, main.ts) ──> PostgreSQL
                                                                     ^
-NestJS Worker (apps/api, worker.ts) ── 스케줄·jobs ─────────────────┘
+NestJS Worker (backend, worker.ts) ── 스케줄·jobs ─────────────────┘
    ├─ SkillRunnerService ── uv run / python3 ──> vendor/ 스킬 스크립트 ──> reports/<run>/*.json
    ├─ ClaudeService ─────── claude -p --output-format json --json-schema
    └─ Adapters ──────────── 스킬 원본 JSON → 정규화 테이블
@@ -18,9 +18,8 @@ NestJS Worker (apps/api, worker.ts) ── 스케줄·jobs ───────
 atlas/
 ├─ CLAUDE.md
 ├─ docs/
-├─ apps/
-│  ├─ web/                 # Next.js App Router
-│  └─ api/                 # NestJS: src/main.ts(API), src/worker.ts(스케줄러+잡 실행)
+├─ frontend/               # Next.js App Router
+├─ backend/                # NestJS: src/main.ts(API), src/worker.ts(스케줄러+잡 실행)
 ├─ packages/
 │  └─ contracts/           # 공유 타입, Claude 출력 JSON 스키마
 ├─ vendor/                 # git submodule, 커밋 고정
