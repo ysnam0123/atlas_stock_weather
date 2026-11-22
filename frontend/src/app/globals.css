@@ -1,26 +1,93 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* 디자인 토큰 (docs/frontend.md). bg-primary, text-text-muted, border-border 처럼 쓴다 */
+@theme {
+  --color-primary: #F2603F;
+  --color-primary-hover: #E0502F;
+  --color-primary-tint: #FBE3DC;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* 대시보드 톤 (2026-11-23): 흰 바탕 위 흰 카드를 가는 테두리 + 옅은 그림자로 구분. 주황은 활성·주요 버튼에만 */
+  --color-bg: #FFFFFF;
+  --color-surface: #F6F6F6;
+  --color-surface-raised: #FFFFFF;
+  --color-border: #EDEDED;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-text: #181818;
+  --color-text-secondary: #60605D;
+  --color-text-muted: #9DA1A2;
+
+  --color-mist: #B2C5CA;
+  --color-steel: #6E8C95;
+  --color-slate: #697C84;
+  --color-sand: #D9C6AE;
+  --color-mocha: #887869;
+  --color-espresso: #534638;
+
+  /* 등락: 한국식 상승 빨강 / 하락 파랑. primary(주황)와 구분되게 더 진한 빨강. 기호 ▲▼를 같이 쓴다 */
+  --color-up: #D93A3A;
+  --color-down: #2563D9;
+
+  /* 날씨: 팔레트 안에서 고른다 */
+  --color-cond-clear: #F2603F;
+  --color-cond-cloudy: #697C84;
+  --color-cond-rain: #6E8C95;
+
+  /* 섹터 타일 11색 (흰 아이콘이 올라가는 중간 톤) */
+  --color-sector-technology: #5F7F8C;
+  --color-sector-communication: #8A8FB0;
+  --color-sector-cyclical: #C9866B;
+  --color-sector-defensive: #9AA67E;
+  --color-sector-healthcare: #6FA294;
+  --color-sector-financial: #887869;
+  --color-sector-industrials: #697C84;
+  --color-sector-energy: #D08E4F;
+  --color-sector-materials: #A08C6A;
+  --color-sector-realestate: #B88A93;
+  --color-sector-utilities: #7D9BB8;
+
+  /* 흰 카드 그림자: 테두리 대신 아주 옅게 띄운다 */
+  --shadow-card: 0 1px 2px rgb(24 24 24 / 0.03), 0 6px 20px rgb(24 24 24 / 0.04);
+
+  --font-sans: -apple-system, system-ui, "Apple SD Gothic Neo", "Pretendard", sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
+  /* 한국어는 어절 단위로 줄바꿈 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* 하단 탭바만 유리 재질 (docs/frontend.md) */
+.glass {
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  border: 1px solid rgb(255 255 255 / 0.6);
+  box-shadow: 0 8px 28px rgb(24 24 24 / 0.12);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--color-surface-raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* 누르는 순간 반응 */
+.pressable {
+  transition: transform 100ms ease-out, background-color 100ms ease-out;
+}
+.pressable:active {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pressable:active {
+    transform: none;
+    opacity: 0.7;
+  }
 }

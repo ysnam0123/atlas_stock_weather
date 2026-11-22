@@ -96,7 +96,8 @@ export class MarketDailyJob {
       uptrend: json(r.uptrend),
       exposure: json(r.exposure),
     });
-    // 오늘 실패한 스킬의 값(null)으로 이전에 받은 값을 지우지 않는다
+    // 오늘 실패한 스킬의 값(null)으로 이전에 받은 값을 지우지 않는다.
+    // 새로 만들 때도 null은 빼고 넣는다 (목록·Json 칼럼은 null 대신 기본값을 쓴다)
     const update = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null));
 
     const sectors = r.sector.status === 'success' ? adaptSectors(r.sector.json) : [];
@@ -104,7 +105,7 @@ export class MarketDailyJob {
     await this.prisma.$transaction([
       this.prisma.marketSnapshot.upsert({
         where: { market_tradeDate: { market: 'us', tradeDate: date } },
-        create: { market: 'us', tradeDate: date, runId, ...fields },
+        create: { market: 'us', tradeDate: date, runId, ...update },
         update: { runId, ...update },
       }),
       ...(sectors.length

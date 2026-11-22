@@ -22,6 +22,19 @@ describe('adaptMarket', () => {
       exposureCeiling: 2,
       recommendation: 'CASH_PRIORITY',
       condition: 'rain',
+      exposureScore: 4,
+      exposureConfidence: 'LOW',
+      exposureMissing: ['regime', 'top_risk', 'institutional', 'theme', 'ftd'],
+      breadthComponents: [
+        { key: 'breadth_level_trend', score: 52 },
+        { key: 'ma_crossover', score: 35 },
+        { key: 'cycle_position', score: 15 },
+        { key: 'bearish_signal', score: 25 },
+        { key: 'historical_percentile', score: 30 },
+        { key: 'divergence', score: 38 },
+      ],
+      uptrendPercentile: 2.7,
+      uptrendMedian: 0.233,
     });
   });
 

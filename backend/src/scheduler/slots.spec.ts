@@ -1,4 +1,4 @@
-import { latestDueSlot, type Slot } from './slots.js';
+import { latestDueSlot, nextSlot, type Slot } from './slots.js';
 
 // 화~토 13:30, 18:00 KST
 const slot: Slot = { days: [2, 3, 4, 5, 6], times: ['13:30', '18:00'] };
@@ -23,5 +23,16 @@ describe('latestDueSlot', () => {
 
   it('정확히 그 시각이면 포함', () => {
     expect(latestDueSlot(slot, kst('2026-11-24T13:30:00'))).toEqual(kst('2026-11-24T13:30:00'));
+  });
+});
+
+describe('nextSlot', () => {
+  it('오늘 남은 시각 중 가장 이른 것', () => {
+    expect(nextSlot(slot, kst('2026-11-24T09:00:00'))).toEqual(kst('2026-11-24T13:30:00'));
+    expect(nextSlot(slot, kst('2026-11-24T13:30:00'))).toEqual(kst('2026-11-24T18:00:00'));
+  });
+
+  it('토요일 밤이면 화요일 13:30', () => {
+    expect(nextSlot(slot, kst('2026-11-21T19:00:00'))).toEqual(kst('2026-11-24T13:30:00'));
   });
 });

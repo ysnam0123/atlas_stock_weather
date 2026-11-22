@@ -12,6 +12,12 @@ export interface MarketFields {
   exposureCeiling: number | null;
   recommendation: string | null;
   condition: ConditionValue | null;
+  exposureScore: number | null;
+  exposureConfidence: string | null;
+  exposureMissing: string[] | null;
+  breadthComponents: { key: string; score: number }[] | null;
+  uptrendPercentile: number | null;
+  uptrendMedian: number | null;
 }
 
 export interface SectorRow {
@@ -45,7 +51,23 @@ export function adaptMarket(raw: {
     exposureCeiling: int(get(raw.exposure, 'exposure_ceiling_pct')),
     recommendation,
     condition: recommendation ? (CONDITION[recommendation] ?? null) : null,
+    exposureScore: num(get(raw.exposure, 'composite_score')),
+    exposureConfidence: str(get(raw.exposure, 'confidence')),
+    exposureMissing: strings(get(raw.exposure, 'inputs_missing')),
+    breadthComponents: breadthComponents(get(raw.breadth, 'components')),
+    uptrendPercentile: num(get(raw.uptrend, 'components', 'historical_context', 'percentile')),
+    uptrendMedian: num(get(raw.uptrend, 'components', 'historical_context', 'historical_median')),
   };
+}
+
+/** 시장 점수를 이루는 항목별 점수. 순서는 스킬 출력 순서(가중치 큰 것부터) */
+function breadthComponents(raw: unknown): { key: string; score: number }[] | null {
+  if (raw === null || typeof raw !== 'object') return null;
+  const rows = Object.entries(raw as Record<string, unknown>).flatMap(([key, v]) => {
+    const score = num(get(v, 'score'));
+    return score === null || get(v, 'data_available') === false ? [] : [{ key, score }];
+  });
+  return rows.length ? rows : null;
 }
 
 export function adaptSectors(raw: unknown): SectorRow[] {
@@ -107,6 +129,10 @@ function num(v: unknown): number | null {
 function int(v: unknown): number | null {
   const n = num(v);
   return n === null ? null : Math.round(n);
+}
+
+function strings(v: unknown): string[] | null {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : null;
 }
 
 function str(v: unknown): string | null {

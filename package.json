@@ -2,5 +2,9 @@
   "name": "atlas",
   "private": true,
   "packageManager": "pnpm@10.33.0",
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter backend --filter frontend dev",
+    "worker": "pnpm --filter backend worker"
+  }
 }

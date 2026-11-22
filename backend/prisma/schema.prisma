@@ -79,6 +79,13 @@ model MarketSnapshot {
   recommendation  String? // NEW_ENTRY_ALLOWED | REDUCE_ONLY | CASH_PRIORITY
   condition       Condition?
   summaryKo       String?
+  // 홈 "왜?"·"다시 맑아지려면" 영역용 (2026-11-23 추가)
+  exposureScore      Float? // exposure-coach composite_score. 30 미만 비, 50 미만 흐림
+  exposureConfidence String? // HIGH | MEDIUM | LOW
+  exposureMissing    String[] // 판정에 빠진 입력 (regime, top_risk, ftd …)
+  breadthComponents  Json? // 시장 점수 6개 항목 [{ key, score }]
+  uptrendPercentile  Float? // 상승추세 비율의 과거 대비 위치 (0~100)
+  uptrendMedian      Float? // 상승추세 비율 과거 중앙값 (0~1)
   createdAt       DateTime   @default(now()) @db.Timestamptz
   updatedAt       DateTime   @updatedAt @db.Timestamptz
 

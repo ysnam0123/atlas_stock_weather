@@ -36,6 +36,7 @@ Atlas는 미국장이 끝난 뒤 자동으로 시장·섹터·내 종목을 분�
 pnpm install
 docker compose up -d          # PostgreSQL
 pnpm --filter backend prisma migrate dev
+pnpm dev                          # API + 화면을 한 터미널에서 같이 (아래 두 줄을 합친 것)
 pnpm --filter backend dev         # NestJS API
 pnpm --filter backend worker      # 스케줄러 + 분석 워커 (켜 두면 밀린 실행을 자동 보충)
 pnpm --filter backend job market_daily   # 시장 날씨 수집을 지금 한 번 실행
