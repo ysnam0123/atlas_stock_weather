@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Market {
+  us
+  kr
+}
+
+enum RunStatus {
+  running
+  success
+  partial // 일부 스킬 실패
+  failed
+}
+
+enum SkillStatus {
+  success
+  failed
+  skipped
+}
+
+enum Condition {
+  clear
+  cloudy
+  rain
+}
+
+model Run {
+  id            String        @id @default(uuid())
+  kind          String // market_daily | evening_refresh | core_weekly | symbols_weekly
+  market        Market        @default(us)
+  status        RunStatus     @default(running)
+  startedAt     DateTime      @default(now()) @db.Timestamptz
+  finishedAt    DateTime?     @db.Timestamptz
+  error         String?
+  claudeCostUsd Decimal?      @db.Decimal(10, 4)
+  skillOutputs  SkillOutput[]
+
+  @@index([kind, startedAt])
+  @@map("runs")
+}
+
+// 스킬 원본 출력은 여기에 통째로 둔다 (절대 규칙 9)
+model SkillOutput {
+  id         String      @id @default(uuid())
+  runId      String
+  run        Run         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  skillId    String
+  status     SkillStatus
+  rawJson    Json?
+  rawMd      String?
+  error      String?
+  durationMs Int?
+  createdAt  DateTime    @default(now()) @db.Timestamptz
+
+  @@index([runId])
+  @@index([skillId, createdAt])
+  @@map("skill_outputs")
+}
+
+// tradeDate는 원본 데이터의 거래일(뉴욕 기준 장 날짜)이다
+model MarketSnapshot {
+  id              String     @id @default(uuid())
+  market          Market     @default(us)
+  tradeDate       DateTime   @db.Date
+  runId           String
+  marketScore     Float? // market-breadth-analyzer composite_score
+  breadthZone     String?
+  uptrendRatio    Float? // uptrend-analyzer 전체 상승추세 비율 (0~1)
+  uptrendScore    Float?
+  uptrendZone     String?
+  exposureCeiling Int? // exposure-coach exposure_ceiling_pct
+  recommendation  String? // NEW_ENTRY_ALLOWED | REDUCE_ONLY | CASH_PRIORITY
+  condition       Condition?
+  summaryKo       String?
+  createdAt       DateTime   @default(now()) @db.Timestamptz
+  updatedAt       DateTime   @updatedAt @db.Timestamptz
+
+  @@unique([market, tradeDate])
+  @@map("market_snapshots")
+}
+
+model SectorSnapshot {
+  id           String   @id @default(uuid())
+  market       Market   @default(us)
+  tradeDate    DateTime @db.Date
+  runId        String
+  sector       String
+  rank         Int
+  uptrendRatio Float
+  trend        String? // Up | Down
+  slope        Float?
+  status       String? // Normal | Overbought | Oversold
+  createdAt    DateTime @default(now()) @db.Timestamptz
+
+  @@unique([market, tradeDate, sector])
+  @@map("sector_snapshots")
+}

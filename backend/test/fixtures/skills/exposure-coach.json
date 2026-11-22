@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-11-22T12:36:39.009618+00:00",
+  "exposure_ceiling_pct": 2,
+  "bias": "NEUTRAL",
+  "participation": "NARROW",
+  "recommendation": "CASH_PRIORITY",
+  "confidence": "LOW",
+  "composite_score": 4.0,
+  "component_scores": {
+    "breadth_score": 33,
+    "uptrend_score": 22,
+    "sector_score": 3
+  },
+  "inputs_provided": [
+    "breadth",
+    "uptrend",
+    "sector"
+  ],
+  "inputs_missing": [
+    "regime",
+    "top_risk",
+    "institutional",
+    "theme",
+    "ftd"
+  ],
+  "rationale": "Narrow participation suggests fragile market structure. Missing critical inputs (regime, top_risk) reduce confidence. Capital preservation is the priority. Sector score uses an uncalibrated equal-sector uptrend-health heuristic; it shares upstream data with Uptrend and does not independently set bias or participation. Confidence measures input completeness, not verified quality or independent confirmation.",
+  "sector_integration": {
+    "mapping_version": "sector_uptrend_health_v1",
+    "score": 3,
+    "sector_count": 11,
+    "positive_slope_count": 0,
+    "mean_ratio": 0.061449273826467636,
+    "source_freshness": {
+      "date": "2026-11-20",
+      "is_fresh": true,
+      "warning": null
+    },
+    "freshness_verified": false,
+    "scope": "composite score only; bias and participation use other accepted inputs",
+    "sector_health": [
+      {
+        "sector": "Technology",
+        "ratio": 0.07065217391304347,
+        "slope": -0.01186061381074166,
+        "trend": "down",
+        "health_score": 1.5553563424473325
+      },
+      {
+        "sector": "Consumer Cyclical",
+        "ratio": 0.06884057971014493,
+        "slope": -0.012197214113791127,
+        "trend": "down",
+        "health_score": 1.3872702823845806
+      },
+      {
+        "sector": "Communication Services",
+        "ratio": 0.09900990099009901,
+        "slope": -0.016831683168316847,
+        "trend": "down",
+        "health_score": 5.380961625574322
+      },
+      {
+        "sector": "Financial",
+        "ratio": 0.05244755244755245,
+        "slope": -0.013802863802863774,
+        "trend": "down",
+        "health_score": 0
+      },
+      {
+        "sector": "Industrials",
+        "ratio": 0.04945054945054945,
+        "slope": -0.008618774842179072,
+        "trend": "down",
+        "health_score": 0
+      },
+      {
+        "sector": "Utilities",
+        "ratio": 0.0136986301369863,
+        "slope": -0.002684191040355423,
+        "trend": "down",
+        "health_score": 0
+      },
+      {
+        "sector": "Consumer Defensive",
+        "ratio": 0.12931034482758622,
+        "slope": -0.014187609585038008,
+        "trend": "down",
+        "health_score": 11.12418300653595
+      },
+      {
+        "sector": "Healthcare",
+        "ratio": 0.15284974093264247,
+        "slope": -0.02107866227037214,
+        "trend": "down",
+        "health_score": 15.585898608147922
+      },
+      {
+        "sector": "Real Estate",
+        "ratio": 0.03968253968253968,
+        "slope": -0.01543473110637289,
+        "trend": "down",
+        "health_score": 0
+      },
+      {
+        "sector": "Energy",
+        "ratio": 0.0,
+        "slope": -0.0013157894736842077,
+        "trend": "down",
+        "health_score": 0
+      },
+      {
+        "sector": "Basic Materials",
+        "ratio": 0.0,
+        "slope": -0.010563380281690127,
+        "trend": "down",
+        "health_score": 0
+      }
+    ]
+  }
+}

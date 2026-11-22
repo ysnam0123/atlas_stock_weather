@@ -1,0 +1,6 @@
+[submodule "vendor/claude-trading-skills"]
+	path = vendor/claude-trading-skills
+	url = https://github.com/tradermonty/claude-trading-skills.git
+[submodule "vendor/day-trader-skill"]
+	path = vendor/day-trader-skill
+	url = https://github.com/Jakeschincariol/day-trader-skill.git

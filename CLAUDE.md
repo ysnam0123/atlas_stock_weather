@@ -1,4 +1,4 @@
-# Atlas — 직장인용 미국주식 시장 날씨 비서
+# Atlas — 직장인용 주식 시장 날씨 비서 (미국 먼저, 최종 목표는 코스피까지)
 
 Atlas는 미국장이 끝난 뒤 자동으로 시장·섹터·내 종목을 분석해, 출근길과 퇴근길에 한 화면으로 보여주는 **개인 리서치 비서**다. 매매는 하지 않는다. 주문은 사용자가 증권사 앱에서 직접 한다.
 
@@ -37,7 +37,10 @@ pnpm install
 docker compose up -d          # PostgreSQL
 pnpm --filter backend prisma migrate dev
 pnpm --filter backend dev         # NestJS API
-pnpm --filter backend worker      # 스케줄러 + 분석 워커
+pnpm --filter backend worker      # 스케줄러 + 분석 워커 (켜 두면 밀린 실행을 자동 보충)
+pnpm --filter backend job market_daily   # 시장 날씨 수집을 지금 한 번 실행
+pnpm --filter backend job backfill_uptrend   # 과거 상승추세·섹터 이력 채우기 (이미 있는 날은 건너뜀)
+pnpm --filter backend test        # Adapter·스케줄 단위 테스트 (fixture: backend/test/fixtures/skills)
 pnpm --filter frontend dev         # Next.js
 ```
 
@@ -47,7 +50,17 @@ pnpm --filter frontend dev         # Next.js
 
 피해야 할 것(생성된 디자인처럼 보이는 패턴): 헤드라인의 한 단어만 색칠, 모든 걸 똑같은 둥근 카드에 담기, "A · B · C" 식 가운뎃점 메타 줄, 대문자 라벨, 장식용 그라데이션, 실제 브랜드 로고, 특정 앱(아이폰 날씨 앱 등) 화면 구성 그대로 따라 하기.
 
-## 학습 모드
+## 진행 모드
+
+지금은 **빌드 모드**다(2026-11-22부터, 화면이 어느 정도 모양을 갖출 때까지). 사용자가 "학습 모드로"라고 하면 아래 학습 모드로 돌아간다.
+
+### 빌드 모드
+
+- Claude가 Phase 단위로 직접 코드를 쓰고, 명령을 실행하고, 동작을 확인한다.
+- Phase가 끝나면 바뀐 것과 확인 방법만 짧게 보고한다.
+- 확인받는 것: API 키 입력, git 커밋·push, 설계 문서에서 벗어나는 결정.
+
+### 학습 모드
 
 이 프로젝트의 목적은 사용자가 직접 배우는 것이다. 아래 방식으로 진행한다.
 
@@ -61,3 +74,9 @@ pnpm --filter frontend dev         # Next.js
 
 - 학습 모드 답변(개념 설명, 직접 해보기 안내)은 제목 앞에 `[학습]`을 붙인다.
 - 코드 작업 답변(파일 수정, 명령 실행 결과 보고)은 제목 앞에 `[code]`를 붙인다.
+
+## TODO.md
+
+- "나중에 하자", "더 생각해보자", 결정을 미룬 내용은 루트 `TODO.md`에 영역별(기획·프론트·백엔드·인프라)로 정리한다.
+- 항목에는 날짜를 적고, 끝나면 `[x]`로 바꾼다.
+- `docs/roadmap.md`의 "미확정 사항"과 겹치는 건 중복해서 적지 않는다.
