@@ -26,7 +26,21 @@ export interface HomeWeather {
   exposureMissing: string[];
   /** 시장 점수를 이루는 6개 항목 (0~100, 높을수록 건강) */
   breadthComponents: { key: string; score: number }[] | null;
+  /** FMP 키로 붙는 판정 입력. 스킬이 실패했거나 키가 없으면 null */
+  topRiskScore: number | null;
+  topRiskZone: string | null;
+  regime: string | null;
+  ftdState: string | null;
   analyzedAt: string;
+}
+
+export interface HomeEarnings {
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  /** 미국 날짜 YYYY-MM-DD (발표 시각은 무료 데이터에 없다) */
+  date: string;
+  tracked: 'holding' | 'watch' | 'ai';
 }
 
 export interface HomeSector {
@@ -59,6 +73,8 @@ export interface HomeResponse {
   sectors: { tradeDate: string; items: HomeSector[] } | null;
   sectorHistory: HomeSectorHistory | null;
   run: { status: RunStatus; startedAt: string; finishedAt: string | null } | null;
+  /** 내 보유·관심·AI 보유 종목의 다가오는 실적 발표 */
+  earnings: HomeEarnings[];
   nextRunAt: string | null;
 }
 

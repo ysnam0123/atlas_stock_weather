@@ -73,7 +73,12 @@ breakout-trade-planner는 새로 살 종목용이다. 이미 보유한 종목은
 
 ## 데이터 주의
 
-- FMP 무료 등급 하루 250회. 실행별 요청 수를 `runs`에 기록한다.
+- FMP 무료 등급 하루 250회. 무료 플랜에서 확인한 것 (2026-11-23):
+  - 되는 것: `/stable/quote`, `/stable/historical-price-eod/full`, `/stable/earnings-calendar`(일부 종목만), `/stable/earnings?symbol=`(대형주 일부만)
+  - 막힌 것: `/stable/economic-calendar`(402, 유료), 옛 주소 `/api/v3/*`(403, 2025-08 이후 가입자), 일부 종목의 종목별 실적(유료)
+  - 스킬 클라이언트는 새 주소 → 옛 주소 → 야후 순으로 시도해서, 막혀도 대부분 야후로 받는다
+- 하루 FMP 요청 예산 (실행 한 번): market-top-detector 약 33, ftd-detector 약 4, macro-regime-detector 몇 회(대부분 야후), 실적 일정 1 + 추적 종목 수. 하루 두 번 돌아도 250회 안
+- market-top-detector는 `pandas-market-calendars`가 필요해 `uv run --extra market-calendar`로 실행한다 (`config/skills-registry.yaml` runtimes.uv.extras)
 - Yahoo Finance는 공식 API가 아니다. 실패 시 해당 종목만 건너뛴다.
 - SEC EDGAR는 `SEC_USER_AGENT` 필수, 초당 요청 제한이 있어 간격을 둔다.
 - 공포지수(VIX)는 MVP 제외. 넣는다면 Yahoo로 별도 수집해야 한다.

@@ -15,7 +15,7 @@ export interface SkillDef {
 }
 
 export interface SkillRegistry {
-  runtimes: { uv: { project: string } };
+  runtimes: { uv: { project: string; extras?: string[] } };
   skills: Record<string, SkillDef>;
 }
 

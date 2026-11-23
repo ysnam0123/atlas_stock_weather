@@ -105,8 +105,9 @@ export class SkillRunnerService {
 
   private command(def: SkillDef, args: string[]): [string, string[]] {
     if (def.runtime === 'uv') {
-      const project = join(repoRoot(), this.registry.runtimes.uv.project);
-      return ['uv', ['run', '--project', project, 'python', def.script, ...args]];
+      const { project, extras = [] } = this.registry.runtimes.uv;
+      const extraArgs = extras.flatMap((e) => ['--extra', e]);
+      return ['uv', ['run', '--project', join(repoRoot(), project), ...extraArgs, 'python', def.script, ...args]];
     }
     return ['python3', [def.script, ...args]];
   }

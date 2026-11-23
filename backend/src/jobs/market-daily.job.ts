@@ -38,20 +38,24 @@ export class MarketDailyJob {
     this.logger.log(`시작 ${run.id}`);
 
     try {
-      const [breadth, uptrend, sector] = await Promise.all([
+      // 고점 위험·큰 흐름·바닥 확인은 FMP 키로 붙는 입력. 실패해도 나머지로 판정한다 (빠진 입력은 신뢰도가 낮아진다)
+      const [breadth, uptrend, sector, topRisk, regime, ftd] = await Promise.all([
         this.skills.run(run.id, 'market-breadth-analyzer'),
         this.skills.run(run.id, 'uptrend-analyzer'),
         this.skills.run(run.id, 'sector-analyst'),
+        this.skills.run(run.id, 'market-top-detector'),
+        this.skills.run(run.id, 'macro-regime-detector'),
+        this.skills.run(run.id, 'ftd-detector'),
       ]);
-      const upstream = { [breadth.skillId]: breadth, [uptrend.skillId]: uptrend, [sector.skillId]: sector };
+      const upstream = Object.fromEntries([breadth, uptrend, sector, topRisk, regime, ftd].map((r) => [r.skillId, r]));
       const exposure =
         breadth.status === 'success' || uptrend.status === 'success'
           ? await this.skills.run(run.id, 'exposure-coach', upstream)
           : await this.skills.skip(run.id, 'exposure-coach', '시장 폭·상승추세가 모두 실패');
 
-      const tradeDate = await this.save(run.id, { breadth, uptrend, sector, exposure });
+      const tradeDate = await this.save(run.id, { breadth, uptrend, sector, exposure, topRisk, regime, ftd });
 
-      const results = [breadth, uptrend, sector, exposure];
+      const results = [breadth, uptrend, sector, topRisk, regime, ftd, exposure];
       const ok = results.filter((r) => r.status === 'success').length;
       const status = !tradeDate || ok === 0 ? 'failed' : ok === results.length ? 'success' : 'partial';
       const failedSkills = results.filter((r) => r.status !== 'success').map((r) => r.skillId);
@@ -80,7 +84,7 @@ export class MarketDailyJob {
   /** 거래일 기준으로 덮어쓴다. 같은 장을 두 번 받아도 한 줄이다. */
   private async save(
     runId: string,
-    r: Record<'breadth' | 'uptrend' | 'sector' | 'exposure', SkillResult>,
+    r: Record<'breadth' | 'uptrend' | 'sector' | 'exposure' | 'topRisk' | 'regime' | 'ftd', SkillResult>,
   ): Promise<string | null> {
     const json = (x: SkillResult) => (x.status === 'success' ? x.json : undefined);
     const tradeDate = pickTradeDate({
@@ -95,6 +99,9 @@ export class MarketDailyJob {
       breadth: json(r.breadth),
       uptrend: json(r.uptrend),
       exposure: json(r.exposure),
+      topRisk: json(r.topRisk),
+      regime: json(r.regime),
+      ftd: json(r.ftd),
     });
     // 오늘 실패한 스킬의 값(null)으로 이전에 받은 값을 지우지 않는다.
     // 새로 만들 때도 null은 빼고 넣는다 (목록·Json 칼럼은 null 대신 기본값을 쓴다)

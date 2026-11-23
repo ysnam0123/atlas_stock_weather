@@ -18,6 +18,10 @@ export interface MarketFields {
   breadthComponents: { key: string; score: number }[] | null;
   uptrendPercentile: number | null;
   uptrendMedian: number | null;
+  topRiskScore: number | null;
+  topRiskZone: string | null;
+  regime: string | null;
+  ftdState: string | null;
 }
 
 export interface SectorRow {
@@ -40,6 +44,9 @@ export function adaptMarket(raw: {
   breadth?: unknown;
   uptrend?: unknown;
   exposure?: unknown;
+  topRisk?: unknown;
+  regime?: unknown;
+  ftd?: unknown;
 }): MarketFields {
   const recommendation = str(get(raw.exposure, 'recommendation'));
   return {
@@ -57,6 +64,10 @@ export function adaptMarket(raw: {
     breadthComponents: breadthComponents(get(raw.breadth, 'components')),
     uptrendPercentile: num(get(raw.uptrend, 'components', 'historical_context', 'percentile')),
     uptrendMedian: num(get(raw.uptrend, 'components', 'historical_context', 'historical_median')),
+    topRiskScore: num(get(raw.topRisk, 'composite', 'composite_score')),
+    topRiskZone: str(get(raw.topRisk, 'composite', 'zone')),
+    regime: str(get(raw.regime, 'regime', 'current_regime')),
+    ftdState: str(get(raw.ftd, 'market_state', 'combined_state')),
   };
 }
 

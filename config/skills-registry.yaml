@@ -9,6 +9,8 @@
 runtimes:
   uv:
     project: vendor/claude-trading-skills # uv run --project <project> python <script>
+    # market-top-detector가 쓰는 거래일 달력 (pandas-market-calendars). pyproject의 선택 의존성
+    extras: [market-calendar]
 
 skills:
   market-breadth-analyzer:
@@ -38,6 +40,28 @@ skills:
     output: sector_rotation_*.json
     timeoutSec: 120
 
+  # FMP_API_KEY 필요 (.env). 무료 플랜은 새 주소(stable)만 되고, 막히면 야후로 받는다
+  market-top-detector:
+    runtime: uv
+    script: vendor/claude-trading-skills/skills/market-top-detector/scripts/market_top_detector.py
+    args: [--output-dir, '{outputDir}']
+    output: market_top_*.json
+    timeoutSec: 300
+
+  macro-regime-detector:
+    runtime: uv
+    script: vendor/claude-trading-skills/skills/macro-regime-detector/scripts/macro_regime_detector.py
+    args: [--output-dir, '{outputDir}']
+    output: macro_regime_*.json
+    timeoutSec: 300
+
+  ftd-detector:
+    runtime: uv
+    script: vendor/claude-trading-skills/skills/ftd-detector/scripts/ftd_detector.py
+    args: [--output-dir, '{outputDir}']
+    output: ftd_detector_*.json
+    timeoutSec: 180
+
   exposure-coach:
     runtime: uv
     script: vendor/claude-trading-skills/skills/exposure-coach/scripts/calculate_exposure.py
@@ -46,6 +70,9 @@ skills:
       --breadth: market-breadth-analyzer
       --uptrend: uptrend-analyzer
       --sector: sector-analyst
+      --regime: macro-regime-detector
+      --top-risk: market-top-detector
+      --ftd: ftd-detector
     output: exposure_posture_*.json
     timeoutSec: 60
 

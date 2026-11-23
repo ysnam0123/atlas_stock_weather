@@ -21,7 +21,7 @@ export class HomeService {
   constructor(private readonly prisma: PrismaService) {}
 
   async get(market: Market) {
-    const [weather, history, sectors, sectorHistory, run] = await Promise.all([
+    const [weather, history, sectors, sectorHistory, run, earnings] = await Promise.all([
       this.weather(market),
       this.history(market),
       this.sectors(market),
@@ -31,8 +31,41 @@ export class HomeService {
         orderBy: { startedAt: 'desc' },
         select: { status: true, startedAt: true, finishedAt: true },
       }),
+      this.earnings(),
     ]);
-    return { market, weather, history, sectors, sectorHistory, run, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
+    return { market, weather, history, sectors, sectorHistory, run, earnings, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
+  }
+
+  /** 내 보유·관심·AI 보유 종목의 다가오는 실적 발표 (미국 날짜) */
+  private async earnings() {
+    const [h, w, a] = await Promise.all([
+      this.prisma.holding.findMany({ select: { symbol: true } }),
+      this.prisma.watchItem.findMany({ select: { symbol: true } }),
+      this.prisma.aiPosition.findMany({ where: { status: 'open' }, select: { symbol: true } }),
+    ]);
+    const kind = new Map<string, 'holding' | 'watch' | 'ai'>();
+    for (const x of a) kind.set(x.symbol, 'ai');
+    for (const x of w) kind.set(x.symbol, 'watch');
+    for (const x of h) kind.set(x.symbol, 'holding');
+    if (!kind.size) return [];
+    // 미국 날짜 기준 오늘 (뉴욕은 한국보다 하루 늦을 수 있어 하루 여유)
+    const since = new Date(Date.now() - 86_400_000);
+    const rows = await this.prisma.calendarEvent.findMany({
+      where: { type: 'earnings', symbol: { in: [...kind.keys()] }, date: { gte: new Date(day(since)) } },
+      orderBy: { date: 'asc' },
+    });
+    const names = await this.prisma.symbol.findMany({
+      where: { symbol: { in: rows.map((r) => r.symbol) } },
+      select: { symbol: true, nameEn: true, nameKo: true },
+    });
+    const byName = new Map(names.map((n) => [n.symbol, n]));
+    return rows.map((r) => ({
+      symbol: r.symbol,
+      nameEn: byName.get(r.symbol)?.nameEn ?? r.symbol,
+      nameKo: byName.get(r.symbol)?.nameKo ?? null,
+      date: day(r.date),
+      tracked: kind.get(r.symbol)!,
+    }));
   }
 
   private async weather(market: Market) {
@@ -71,6 +104,10 @@ export class HomeService {
       exposureConfidence: latest.exposureConfidence,
       exposureMissing: latest.exposureMissing,
       breadthComponents: (latest.breadthComponents as { key: string; score: number }[] | null) ?? null,
+      topRiskScore: latest.topRiskScore,
+      topRiskZone: latest.topRiskZone,
+      regime: latest.regime,
+      ftdState: latest.ftdState,
       analyzedAt: latest.updatedAt.toISOString(),
     };
   }

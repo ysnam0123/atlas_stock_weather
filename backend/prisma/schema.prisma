@@ -86,6 +86,11 @@ model MarketSnapshot {
   breadthComponents  Json? // 시장 점수 6개 항목 [{ key, score }]
   uptrendPercentile  Float? // 상승추세 비율의 과거 대비 위치 (0~100)
   uptrendMedian      Float? // 상승추세 비율 과거 중앙값 (0~1)
+  // FMP 키로 붙는 판정 입력 (2026-11-23)
+  topRiskScore Float? // market-top-detector composite (0~100, 높을수록 고점 위험)
+  topRiskZone  String? // Green | Yellow | Orange | Red …
+  regime       String? // macro-regime-detector current_regime (contraction, broadening …)
+  ftdState     String? // ftd-detector combined_state (CORRECTION, FTD_CONFIRMED, FTD_INVALIDATED …)
   createdAt       DateTime   @default(now()) @db.Timestamptz
   updatedAt       DateTime   @updatedAt @db.Timestamptz
 
@@ -289,4 +294,19 @@ model MyEquity {
   realizedPnl Float
 
   @@map("my_equity")
+}
+
+// 일정. 지금은 실적 발표만 (FMP 무료 플랜은 경제지표 일정이 막혀 있다). date는 미국 날짜
+model CalendarEvent {
+  id               String   @id @default(uuid())
+  type             String // earnings
+  symbol           String
+  date             DateTime @db.Date
+  epsEstimated     Float?
+  revenueEstimated Float?
+  updatedAt        DateTime @updatedAt @db.Timestamptz
+
+  @@unique([type, symbol, date])
+  @@index([date])
+  @@map("calendar_events")
 }

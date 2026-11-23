@@ -63,6 +63,8 @@ export function HomeScreen() {
             weather={weather}
             my={my.data}
             aiSignals={(ai.data?.signals ?? []).filter((s) => s.date === ai.data?.signals[0]?.date)}
+            earnings={data.earnings}
+            now={now}
             onSetCapital={openCapital}
             onOpenConditions={() => {
               setDetailOpen(true);
@@ -99,7 +101,7 @@ export function HomeScreen() {
           <WatchCard my={my.data} failed={my.isError} condition={weather?.condition ?? null} />
         </div>
         <div className={`${CARD} max-lg:order-5`}>
-          <ScheduleCard />
+          <ScheduleCard earnings={data.earnings} now={now} />
         </div>
       </aside>
 

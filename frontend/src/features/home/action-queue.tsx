@@ -1,4 +1,4 @@
-import type { AiSignal, HomeWeather, MyResponse } from "@atlas/contracts";
+import type { AiSignal, HomeEarnings, HomeWeather, MyResponse } from "@atlas/contracts";
 import {
   CalendarDays,
   ChevronRight,
@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { displayName, STOP_NEAR_PCT, usd } from "@/features/my/format";
 import { clearSteps } from "./format";
+import { daysUntil } from "./schedule-card";
 import { SectionTitle } from "./section";
 
 interface Action {
@@ -37,6 +38,8 @@ export function ActionQueue({
   weather,
   my,
   aiSignals,
+  earnings,
+  now,
   onOpenConditions,
   onSetCapital,
 }: {
@@ -45,6 +48,8 @@ export function ActionQueue({
   my: MyResponse | undefined;
   /** 가장 최근 장의 AI 신호. 내 종목 매도 신호와 AI 매수 예정만 쓴다 */
   aiSignals: AiSignal[];
+  earnings: HomeEarnings[];
+  now: Date;
   onOpenConditions: () => void;
   onSetCapital: () => void;
 }) {
@@ -81,6 +86,19 @@ export function ActionQueue({
       text: `AI 매도 신호: ${displayName(s)}`,
       sub: s.checks[0]?.detail ?? s.reasonKo,
       href: "/ai",
+    });
+  }
+
+  // 보유 종목 실적 발표가 일주일 안이면 (발표 날 크게 움직일 수 있다)
+  for (const e of earnings.filter((x) => x.tracked === "holding")) {
+    const d = daysUntil(e.date, now);
+    if (d < 0 || d > 7) continue;
+    actions.push({
+      key: `earnings-${e.symbol}`,
+      icon: CalendarDays,
+      text: `${displayName(e)} 실적 발표 ${d === 0 ? "오늘" : `D-${d}`}`,
+      sub: "발표 날은 크게 움직일 수 있어요. 손절가와 비중을 미리 확인해 두세요",
+      href: "/my",
     });
   }
 
@@ -170,14 +188,6 @@ export function ActionQueue({
       href: "/ai",
     });
   }
-
-  actions.push({
-    key: "schedule",
-    icon: CalendarDays,
-    muted: true,
-    text: "이번 주 발표 일정은 준비 중이에요",
-    sub: "FMP 키를 연결하면 물가·고용 발표와 실적 발표가 한국 시간으로 나와요",
-  });
 
   return (
     <section aria-labelledby="actions-title">

@@ -35,6 +35,24 @@ describe('adaptMarket', () => {
       ],
       uptrendPercentile: 2.7,
       uptrendMedian: 0.233,
+      topRiskScore: null,
+      topRiskZone: null,
+      regime: null,
+      ftdState: null,
+    });
+  });
+
+  it('FMP 판정 입력 (고점 위험, 큰 흐름, 바닥 확인)', () => {
+    const fields = adaptMarket({
+      topRisk: { composite: { composite_score: 78.4, zone: 'Red (High Risk)' } },
+      regime: { regime: { current_regime: 'contraction' } },
+      ftd: { market_state: { combined_state: 'FTD_INVALIDATED' } },
+    });
+    expect(fields).toMatchObject({
+      topRiskScore: 78.4,
+      topRiskZone: 'Red (High Risk)',
+      regime: 'contraction',
+      ftdState: 'FTD_INVALIDATED',
     });
   });
 

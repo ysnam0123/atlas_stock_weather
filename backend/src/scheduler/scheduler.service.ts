@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { AI_DAILY, AiDailyJob } from '../ai/ai-daily.job.js';
 import { BACKFILL_UPTREND, BackfillUptrendJob } from '../jobs/backfill-uptrend.job.js';
 import { MARKET_DAILY, MarketDailyJob } from '../jobs/market-daily.job.js';
+import { EARNINGS_CALENDAR, EarningsCalendarJob } from '../jobs/earnings-calendar.job.js';
 import { PRICES_DAILY, PricesService } from '../jobs/prices.service.js';
 import { SYMBOLS_WEEKLY, SymbolsWeeklyJob } from '../jobs/symbols-weekly.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -36,6 +37,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly symbolsWeekly: SymbolsWeeklyJob,
     private readonly prices: PricesService,
     private readonly aiDaily: AiDailyJob,
+    private readonly earnings: EarningsCalendarJob,
   ) {}
 
   async onApplicationBootstrap() {
@@ -59,6 +61,8 @@ export class SchedulerService implements OnApplicationBootstrap {
       await this.ensure(MARKET_DAILY, MARKET_DAILY_SLOT, () => this.marketDaily.run());
       // 보유·관심 종목 일봉: 시장 날씨와 같은 시각. 실패해도 시장 날씨와 따로 다시 시도한다
       await this.ensure(PRICES_DAILY, MARKET_DAILY_SLOT, () => this.prices.runDaily());
+      // 실적 일정: FMP 요청 1회
+      await this.ensure(EARNINGS_CALENDAR, MARKET_DAILY_SLOT, () => this.earnings.run());
       // AI 모의 계좌: 시장 날씨·일봉 다음. 스캔에 몇 분 걸린다
       await this.ensure(AI_DAILY, MARKET_DAILY_SLOT, () => this.aiDaily.run());
       await this.ensure(BACKFILL_UPTREND, BACKFILL_UPTREND_SLOT, () => this.backfillUptrend.run());

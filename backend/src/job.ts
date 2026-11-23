@@ -3,6 +3,7 @@ import { Logger, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AI_DAILY, AiDailyJob } from './ai/ai-daily.job.js';
 import { BACKFILL_UPTREND, BackfillUptrendJob } from './jobs/backfill-uptrend.job.js';
+import { EARNINGS_CALENDAR, EarningsCalendarJob } from './jobs/earnings-calendar.job.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { MARKET_DAILY, MarketDailyJob } from './jobs/market-daily.job.js';
 import { PRICES_DAILY, PricesService } from './jobs/prices.service.js';
@@ -22,6 +23,7 @@ const jobs: Record<string, () => Promise<unknown>> = {
   [SYMBOLS_WEEKLY]: () => app.get(SymbolsWeeklyJob).run(),
   [PRICES_DAILY]: () => app.get(PricesService).runDaily(),
   [AI_DAILY]: () => app.get(AiDailyJob).run(),
+  [EARNINGS_CALENDAR]: () => app.get(EarningsCalendarJob).run(),
 };
 
 try {

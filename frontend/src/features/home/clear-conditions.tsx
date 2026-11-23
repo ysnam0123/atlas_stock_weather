@@ -67,6 +67,8 @@ export function ClearConditions({ weather, titleId = "clear-title" }: { weather:
             ))}
           </ul>
 
+          <Inputs weather={weather} />
+
           {weather.exposureConfidence && (
             <p className="mt-4 text-[13px] leading-[1.5] text-text-muted">
               판정 신뢰도 {CONFIDENCE_LABEL[weather.exposureConfidence] ?? weather.exposureConfidence}.{" "}
@@ -76,5 +78,50 @@ export function ClearConditions({ weather, titleId = "clear-title" }: { weather:
         </>
       )}
     </section>
+  );
+}
+
+const REGIME: Record<string, string> = {
+  contraction: "수축 (방어적)",
+  broadening: "확산 (넓게 오름)",
+  concentration: "쏠림 (소수 종목만)",
+  inflationary: "인플레이션",
+  transitional: "전환 중",
+};
+const FTD: Record<string, string> = {
+  CORRECTION: "조정 중",
+  RALLY_ATTEMPT: "반등 시도 중",
+  FTD_WINDOW: "바닥 확인 대기",
+  FTD_CONFIRMED: "바닥 확인됨",
+  FTD_INVALIDATED: "바닥 확인 실패",
+  RALLY_FAILED: "반등 실패",
+  FAILED: "실패",
+  NO_SIGNAL: "신호 없음",
+};
+const ZONE: Record<string, string> = { Green: "초록", Yellow: "노랑", Orange: "주황", Red: "빨강" };
+
+/** 판정에 들어간 FMP 입력 세 가지 (고점 위험, 큰 흐름, 바닥 확인). 없으면 "데이터 없음" */
+function Inputs({ weather }: { weather: HomeWeather }) {
+  const zone = weather.topRiskZone?.split(" ")[0];
+  const rows = [
+    {
+      label: "고점 위험",
+      value:
+        weather.topRiskScore != null
+          ? `${score(weather.topRiskScore)}점${zone ? `, ${ZONE[zone] ?? zone}` : ""} (높을수록 위험)`
+          : null,
+    },
+    { label: "큰 흐름", value: weather.regime ? (REGIME[weather.regime] ?? weather.regime) : null },
+    { label: "바닥 확인 신호", value: weather.ftdState ? (FTD[weather.ftdState] ?? weather.ftdState) : null },
+  ];
+  return (
+    <dl className="mt-4 space-y-1.5 rounded-xl bg-surface px-4 py-3 text-[13px]">
+      {rows.map((r) => (
+        <div key={r.label} className="flex justify-between gap-3">
+          <dt className="text-text-secondary">{r.label}</dt>
+          <dd className={r.value ? "text-right" : "text-text-muted"}>{r.value ?? "데이터 없음"}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
