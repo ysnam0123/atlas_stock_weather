@@ -329,3 +329,75 @@ model Commentary {
   @@unique([market, tradeDate])
   @@map("commentaries")
 }
+
+// ── Phase 3 종목 소식: 뉴스·공시, 분기 실적, 의원 거래 (2026-11-23) ──────────
+
+// 야후 헤드라인과 SEC 8-K. id는 스킬이 준 값 (rss:… / sec:…). 제목에 종목이 나오는 것만 저장한다
+model NewsItem {
+  id          String   @id
+  symbol      String
+  kind        String // headline | sec
+  source      String
+  title       String
+  titleKo     String? // Claude 번역 (Phase 4)
+  importance  String? // high | normal (Claude 분류)
+  summary     String?
+  url         String
+  publishedAt DateTime @db.Timestamptz
+  tags        String[]
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@index([symbol, publishedAt])
+  @@map("news_items")
+}
+
+// SEC XBRL 분기 실적 (trader-analyst). 4분기는 연간 − 3개 분기로 만든 값(derived)
+model EarningsFact {
+  symbol          String
+  periodEnd       DateTime @db.Date
+  fiscal          String
+  derived         Boolean
+  revenue         Float?
+  netIncome       Float?
+  epsDiluted      Float?
+  grossMargin     Float?
+  operatingMargin Float?
+  netMargin       Float?
+  revenueYoy      Float?
+  epsYoy          Float?
+  form            String?
+  filed           DateTime? @db.Date
+
+  @@id([symbol, periodEnd])
+  @@map("earnings_facts")
+}
+
+// 미국 하원 의원 주식 거래 신고 (PTR). 신고는 거래 뒤 최대 45일 늦게 온다
+model CongressDoc {
+  docId       String   @id
+  member      String
+  district    String?
+  filed       DateTime @db.Date
+  processedAt DateTime @default(now()) @db.Timestamptz
+  trades      CongressTrade[]
+
+  @@map("congress_docs")
+}
+
+model CongressTrade {
+  id         String      @id @default(uuid())
+  docId      String
+  doc        CongressDoc @relation(fields: [docId], references: [docId], onDelete: Cascade)
+  ticker     String?
+  asset      String
+  type       String // P(매수) | S(매도) | S (partial) | E(교환)
+  typeName   String
+  tradeDate  DateTime?   @db.Date
+  amount     String
+  amountLow  Int?
+  amountHigh Int?
+  owner      String?
+
+  @@index([ticker])
+  @@map("congress_trades")
+}

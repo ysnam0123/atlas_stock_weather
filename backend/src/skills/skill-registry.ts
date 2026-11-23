@@ -9,7 +9,7 @@ export interface SkillDef {
   args: string[];
   /** 플래그 → 앞선 스킬 id. 그 스킬이 성공했을 때만 경로를 붙인다. */
   inputs?: Record<string, string>;
-  /** outputDir 안에서 결과 JSON을 찾는 glob (파일명 패턴, * 만 지원) */
+  /** outputDir 안에서 결과 JSON을 찾는 glob (파일명 패턴, * 만 지원). 'stdout'이면 화면 출력을 JSON으로 읽는다 */
   output: string;
   timeoutSec: number;
 }

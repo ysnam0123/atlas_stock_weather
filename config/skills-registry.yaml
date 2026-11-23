@@ -84,3 +84,26 @@ skills:
     args: [daily, --universe, '{outputDir}/universe.txt', --out, '{outputDir}/watchlist.json', --json, --quiet]
     output: watchlist.json
     timeoutSec: 900
+
+  # Phase 3 종목 소식. 표준 라이브러리 + 야후·SEC. SEC_USER_AGENT 필요 (.env). 티커는 실행할 때 붙인다
+  trader-news:
+    runtime: python3
+    script: vendor/day-trader-skill/trader-news/news.py
+    args: [--all, --hours, '72', --dry-run, --json, --no-moves, --tickers]
+    output: stdout
+    timeoutSec: 300
+
+  trader-analyst:
+    runtime: python3
+    script: vendor/day-trader-skill/trader-analyst/facts.py
+    args: [--quarters, '6', --json]
+    output: stdout
+    timeoutSec: 300
+
+  # 미국 하원 의원 주식 거래 신고(PTR). 문서 목록만. 각 문서는 ptr.py fetch로 따로 읽는다 (pdftotext 필요)
+  trader-pelosi-index:
+    runtime: python3
+    script: vendor/day-trader-skill/trader-pelosi/ptr.py
+    args: [index, --json, --limit, '200', --since]
+    output: stdout
+    timeoutSec: 120

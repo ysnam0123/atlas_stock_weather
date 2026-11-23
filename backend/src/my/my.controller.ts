@@ -64,6 +64,11 @@ export class MyController {
     return this.my.deleteTrade(id);
   }
 
+  @Get('stocks/:symbol/intel')
+  intel(@Param('symbol') symbol: string) {
+    return this.my.intel(norm(symbol));
+  }
+
   @Get('holdings/:symbol/stop-options')
   stopOptions(@Param('symbol') symbol: string, @Query('avgCost') avgCost: string, @Query('shares') shares?: string) {
     return this.my.stopOptions(norm(symbol), avgCost, shares);

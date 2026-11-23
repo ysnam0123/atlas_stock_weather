@@ -21,7 +21,7 @@ export class HomeService {
   constructor(private readonly prisma: PrismaService) {}
 
   async get(market: Market) {
-    const [weather, history, sectors, sectorHistory, run, earnings] = await Promise.all([
+    const [weather, history, sectors, sectorHistory, run, earnings, intel] = await Promise.all([
       this.weather(market),
       this.history(market),
       this.sectors(market),
@@ -32,8 +32,61 @@ export class HomeService {
         select: { status: true, startedAt: true, finishedAt: true },
       }),
       this.earnings(),
+      this.intel(),
     ]);
-    return { market, weather, history, sectors, sectorHistory, run, earnings, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
+    return { market, weather, history, sectors, sectorHistory, run, earnings, intel, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
+  }
+
+  /** 내 보유·관심 종목의 중요한 새 소식(3일)과 의원 거래 신고(신고일 30일) */
+  private async intel() {
+    const [h, w] = await Promise.all([
+      this.prisma.holding.findMany({ select: { symbol: true } }),
+      this.prisma.watchItem.findMany({ select: { symbol: true } }),
+    ]);
+    const kind = new Map<string, 'holding' | 'watch'>();
+    for (const x of w) kind.set(x.symbol, 'watch');
+    for (const x of h) kind.set(x.symbol, 'holding');
+    const symbols = [...kind.keys()];
+    if (!symbols.length) return { news: [], congress: [] };
+    const since = (days: number) => new Date(Date.now() - days * 86_400_000);
+    const [news, trades, names] = await Promise.all([
+      this.prisma.newsItem.findMany({
+        where: { symbol: { in: symbols }, importance: 'high', publishedAt: { gte: since(3) } },
+        orderBy: { publishedAt: 'desc' },
+        take: 6,
+      }),
+      this.prisma.congressTrade.findMany({
+        where: { ticker: { in: symbols }, doc: { filed: { gte: since(30) } } },
+        include: { doc: { select: { member: true, filed: true } } },
+        orderBy: { doc: { filed: 'desc' } },
+        take: 10,
+      }),
+      this.prisma.symbol.findMany({ where: { symbol: { in: symbols } }, select: { symbol: true, nameEn: true, nameKo: true } }),
+    ]);
+    const nameOf = new Map(names.map((n) => [n.symbol, n]));
+    const name = (s: string) => ({ nameEn: nameOf.get(s)?.nameEn ?? s, nameKo: nameOf.get(s)?.nameKo ?? null });
+    return {
+      news: news.map((n) => ({
+        id: n.id,
+        symbol: n.symbol,
+        ...name(n.symbol),
+        tracked: kind.get(n.symbol)!,
+        kind: n.kind,
+        title: n.titleKo ?? n.title,
+        url: n.url,
+        publishedAt: n.publishedAt.toISOString(),
+      })),
+      congress: trades.map((t) => ({
+        symbol: t.ticker!,
+        ...name(t.ticker!),
+        tracked: kind.get(t.ticker!)!,
+        member: t.doc.member.replace(/^Hon\.\s*/, ''),
+        type: t.type,
+        amount: t.amount,
+        tradeDate: t.tradeDate ? day(t.tradeDate) : null,
+        filed: day(t.doc.filed),
+      })),
+    };
   }
 
   /** 내 보유·관심·AI 보유 종목의 다가오는 실적 발표 (미국 날짜) */

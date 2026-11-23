@@ -6,6 +6,7 @@ import { BACKFILL_UPTREND, BackfillUptrendJob } from '../jobs/backfill-uptrend.j
 import { MARKET_DAILY, MarketDailyJob } from '../jobs/market-daily.job.js';
 import { EARNINGS_CALENDAR, EarningsCalendarJob } from '../jobs/earnings-calendar.job.js';
 import { PRICES_DAILY, PricesService } from '../jobs/prices.service.js';
+import { STOCK_INTEL, StockIntelJob } from '../jobs/stock-intel.job.js';
 import { SYMBOLS_WEEKLY, SymbolsWeeklyJob } from '../jobs/symbols-weekly.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestDueSlot, type Slot } from './slots.js';
@@ -40,6 +41,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly aiDaily: AiDailyJob,
     private readonly earnings: EarningsCalendarJob,
     private readonly commentary: CommentaryJob,
+    private readonly stockIntel: StockIntelJob,
   ) {}
 
   async onApplicationBootstrap() {
@@ -69,6 +71,8 @@ export class SchedulerService implements OnApplicationBootstrap {
       await this.ensure(AI_DAILY, MARKET_DAILY_SLOT, () => this.aiDaily.run());
       // Claude 해설: 판정과 AI 신호가 다 나온 뒤. 같은 장 날짜는 다시 만들지 않는다
       await this.ensure(COMMENTARY_DAILY, MARKET_DAILY_SLOT, () => this.commentary.run());
+      // 내 종목 소식: 뉴스·공시, 분기 실적, 의원 거래 신고
+      await this.ensure(STOCK_INTEL, MARKET_DAILY_SLOT, () => this.stockIntel.run());
       await this.ensure(BACKFILL_UPTREND, BACKFILL_UPTREND_SLOT, () => this.backfillUptrend.run());
       await this.ensure(SYMBOLS_WEEKLY, SYMBOLS_WEEKLY_SLOT, () => this.symbolsWeekly.run());
     } catch (err) {

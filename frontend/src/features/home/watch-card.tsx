@@ -12,10 +12,13 @@ export function WatchCard({
   my,
   failed,
   condition,
+  onInfo,
 }: {
   my: MyResponse | undefined;
   failed: boolean;
   condition: MarketCondition | null;
+  /** 행을 누르면 그 종목 소식 시트 */
+  onInfo: (target: { symbol: string; nameKo: string | null; nameEn: string }) => void;
 }) {
   const watch = my?.watchlist ?? [];
   const status = condition === "clear" ? "진입 조건 준비 중" : "맑아지면 확인";
@@ -39,18 +42,24 @@ export function WatchCard({
           {watch.map((w) => {
             const change = changeText(w.changePct);
             return (
-              <li key={w.symbol} className="flex items-center gap-3 border-b border-border py-2.5 last:border-b-0">
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-2">
-                    <span className="truncate text-[15px] font-medium">{displayName(w)}</span>
-                    <span className="shrink-0 text-[12px] text-text-muted">{w.symbol}</span>
+              <li key={w.symbol} className="border-b border-border last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => onInfo(w)}
+                  className="pressable -mx-2 flex w-[calc(100%+16px)] items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-surface"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="truncate text-[15px] font-medium">{displayName(w)}</span>
+                      <span className="shrink-0 text-[12px] text-text-muted">{w.symbol}</span>
+                    </span>
+                    <span className="mt-0.5 block text-[12px] text-text-muted">{status}</span>
                   </span>
-                  <span className="mt-0.5 block text-[12px] text-text-muted">{status}</span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-[15px] tabular-nums">{w.lastClose != null ? usd(w.lastClose) : "—"}</span>
-                  {change && <span className={`block text-[12px] tabular-nums ${change.tone}`}>{change.text}</span>}
-                </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-[15px] tabular-nums">{w.lastClose != null ? usd(w.lastClose) : "—"}</span>
+                    {change && <span className={`block text-[12px] tabular-nums ${change.tone}`}>{change.text}</span>}
+                  </span>
+                </button>
               </li>
             );
           })}

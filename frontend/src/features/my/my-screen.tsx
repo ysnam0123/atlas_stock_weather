@@ -1,19 +1,21 @@
 "use client";
 
 import type { MyHolding, MyWatchItem } from "@atlas/contracts";
-import { ChevronRight, Plus, X } from "lucide-react";
+import { ChevronRight, Newspaper, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { SectionTitle } from "@/features/home/section";
 import { CARD } from "@/shared/ui/card";
 import { changeText, displayName, STOP_TONE_CLASS, stopStatus, usd } from "./format";
 import { HoldingSheet, type SheetTarget } from "./holding-sheet";
+import { type InfoTarget, StockInfoSheet } from "./stock-info-sheet";
 import { useMy, useRemoveWatch } from "./use-my";
 
 /** 내 종목: 보유(수량·평단가·손절가)와 관심 종목. 행을 누르면 편집 시트 */
 export function MyScreen() {
   const { data, isPending, isError, refetch } = useMy();
   const [sheet, setSheet] = useState<SheetTarget | null>(null);
+  const [info, setInfo] = useState<InfoTarget | null>(null);
 
   return (
     <div className="space-y-4 pt-2 lg:space-y-5 lg:p-5 lg:pl-0">
@@ -49,7 +51,7 @@ export function MyScreen() {
             {data.holdings.length ? (
               <ul className="mt-2 -mx-2">
                 {data.holdings.map((h) => (
-                  <HoldingRow key={h.symbol} h={h} onOpen={() => setSheet({ ...h, holding: h })} />
+                  <HoldingRow key={h.symbol} h={h} onOpen={() => setSheet({ ...h, holding: h })} onInfo={() => setInfo(h)} />
                 ))}
               </ul>
             ) : (
@@ -66,7 +68,7 @@ export function MyScreen() {
             {data.watchlist.length ? (
               <ul className="mt-2 -mx-2">
                 {data.watchlist.map((w) => (
-                  <WatchRow key={w.symbol} w={w} onBuy={() => setSheet(w)} />
+                  <WatchRow key={w.symbol} w={w} onBuy={() => setSheet(w)} onInfo={() => setInfo(w)} />
                 ))}
               </ul>
             ) : (
@@ -79,7 +81,22 @@ export function MyScreen() {
       )}
 
       <HoldingSheet target={sheet} onClose={() => setSheet(null)} />
+      <StockInfoSheet target={info} onClose={() => setInfo(null)} />
     </div>
+  );
+}
+
+function InfoButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${label} 소식`}
+      title="뉴스·공시, 분기 실적, 의원 거래"
+      className="pressable grid size-11 shrink-0 place-items-center rounded-full text-text-muted hover:bg-surface hover:text-text"
+    >
+      <Newspaper size={18} aria-hidden />
+    </button>
   );
 }
 
@@ -97,11 +114,11 @@ function PriceCell({ lastClose, changePct }: { lastClose: number | null; changeP
   );
 }
 
-function HoldingRow({ h, onOpen }: { h: MyHolding; onOpen: () => void }) {
+function HoldingRow({ h, onOpen, onInfo }: { h: MyHolding; onOpen: () => void; onInfo: () => void }) {
   const status = stopStatus(h);
   return (
-    <li className="border-b border-border last:border-b-0">
-      <button type="button" onClick={onOpen} className="pressable flex w-full items-center gap-3 rounded-2xl px-2 py-3 text-left hover:bg-surface">
+    <li className="flex items-center border-b border-border last:border-b-0">
+      <button type="button" onClick={onOpen} className="pressable flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-3 text-left hover:bg-surface">
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <span className="truncate text-[16px] font-medium">{displayName(h)}</span>
@@ -117,11 +134,12 @@ function HoldingRow({ h, onOpen }: { h: MyHolding; onOpen: () => void }) {
         <PriceCell lastClose={h.lastClose} changePct={h.changePct} />
         <ChevronRight size={18} className="shrink-0 text-text-muted" aria-hidden />
       </button>
+      <InfoButton label={displayName(h)} onClick={onInfo} />
     </li>
   );
 }
 
-function WatchRow({ w, onBuy }: { w: MyWatchItem; onBuy: () => void }) {
+function WatchRow({ w, onBuy, onInfo }: { w: MyWatchItem; onBuy: () => void; onInfo: () => void }) {
   const remove = useRemoveWatch();
   return (
     <li className="flex items-center gap-2 border-b border-border px-2 py-3 last:border-b-0">
@@ -135,6 +153,7 @@ function WatchRow({ w, onBuy }: { w: MyWatchItem; onBuy: () => void }) {
         </button>
       </span>
       <PriceCell lastClose={w.lastClose} changePct={w.changePct} />
+      <InfoButton label={displayName(w)} onClick={onInfo} />
       <button
         type="button"
         aria-label={`${displayName(w)} 관심에서 빼기`}

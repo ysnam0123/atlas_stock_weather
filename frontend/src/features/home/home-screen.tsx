@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAiDuel } from "@/features/ai/use-ai";
+import { type InfoTarget, StockInfoSheet } from "@/features/my/stock-info-sheet";
 import { useMy } from "@/features/my/use-my";
 import { CARD, MOBILE_CARD } from "@/shared/ui/card";
 import { ActionQueue } from "./action-queue";
@@ -37,6 +38,7 @@ export function HomeScreen() {
   const ai = useAiDuel();
   const [detailOpen, setDetailOpen] = useState(false);
   const [capitalOpen, setCapitalOpen] = useState(false);
+  const [info, setInfo] = useState<InfoTarget | null>(null);
 
   if (isPending) return <HomeSkeleton />;
   if (isError) return <ServerDown onRetry={() => refetch()} />;
@@ -64,7 +66,9 @@ export function HomeScreen() {
             my={my.data}
             aiSignals={(ai.data?.signals ?? []).filter((s) => s.date === ai.data?.signals[0]?.date)}
             earnings={data.earnings}
+            intel={data.intel}
             now={now}
+            onInfo={setInfo}
             onSetCapital={openCapital}
             onOpenConditions={() => {
               setDetailOpen(true);
@@ -98,13 +102,14 @@ export function HomeScreen() {
           <AiSignalCard ai={ai.data} failed={ai.isError} />
         </div>
         <div className={`${CARD} max-lg:order-4 lg:flex-1`}>
-          <WatchCard my={my.data} failed={my.isError} condition={weather?.condition ?? null} />
+          <WatchCard my={my.data} failed={my.isError} condition={weather?.condition ?? null} onInfo={setInfo} />
         </div>
         <div className={`${CARD} max-lg:order-5`}>
           <ScheduleCard earnings={data.earnings} now={now} />
         </div>
       </aside>
 
+      <StockInfoSheet target={info} onClose={() => setInfo(null)} />
       <CapitalSheet open={capitalOpen} capital={my.data?.capital ?? null} onClose={() => setCapitalOpen(false)} />
     </div>
   );

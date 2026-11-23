@@ -66,6 +66,7 @@ TZ=Asia/Seoul
 | `core_weekly` | 일 10:00 | 보유 종목 주간 점검, 섹터·테마 주간 변화 |
 | `prices_daily` | 화~토 13:30, 18:00(보충) | 보유·관심 종목 1년치 일봉(야후) → `price_bars`. 장중 미완성 봉은 버림. 실패한 종목만 건너뜀 (구현됨, 2026-11-23) |
 | `earnings_calendar` | 화~토 13:30, 18:00(보충) | 실적 발표 일정: 전체 일정 1회 + 내 보유·관심·AI 보유 종목별 조회 → `calendar_events`. FMP 무료 플랜 한계는 `docs/skills.md` (구현됨, 2026-11-23) |
+| `stock_intel` | 화~토 13:30, 18:00(보충) | 내 보유·관심·AI 보유 종목 소식: trader-news(야후 헤드라인 + SEC 8-K, 제목에 종목이 나오는 것만) → `news_items`, trader-analyst(SEC 분기 실적) → `earnings_facts`, trader-pelosi(하원 의원 거래 신고 PDF, 최근 45일, 한 번에 40개) → `congress_docs`·`congress_trades`, 새 제목 Claude 번역·중요도 (구현됨, 2026-11-23) |
 | `commentary_daily` | 화~토 13:30, 18:00(보충), AI 다음 | Claude 해설 (`claude -p`, JSON 스키마 강제, 도구 끔, 금지 표현 검사): 시장 해설 3줄 + 왜 이런 날씨인가 3줄 → `commentaries`, AI 신호 한 줄 해설 → `ai_signals.commentKo`. 장 날짜마다 한 번. 하루 약 1만5천 토큰 (구현됨, 2026-11-23) |
 | `ai_daily` | 화~토 13:30, 18:00(보충), 시장 날씨·일봉 다음 | AI 모의 계좌: 체결 → 청산 → 계좌 가치 → trader-scanner 스캔·판단 → 내 종목 매도 신호 → 내 계좌 가치. 규칙은 `docs/ai-duel.md` (구현됨, 2026-11-23) |
 | `symbols_weekly` | 일 09:00 | 종목 목록(Nasdaq Trader + 한투 마스터 한글명) 갱신. 약 1만 1,800개, 한글명 약 5,900개. 사용자 별칭은 유지. SEC 티커·CIK는 Phase 3에서 `SEC_USER_AGENT`와 함께 (구현됨, 2026-11-23) |

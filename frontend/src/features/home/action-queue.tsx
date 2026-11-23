@@ -1,10 +1,12 @@
-import type { AiSignal, HomeEarnings, HomeWeather, MyResponse } from "@atlas/contracts";
+import type { AiSignal, HomeEarnings, HomeResponse, HomeWeather, MyResponse } from "@atlas/contracts";
 import {
   CalendarDays,
   ChevronRight,
   CloudSun,
   Eye,
   Flag,
+  Landmark,
+  Newspaper,
   PieChart,
   ShieldAlert,
   Star,
@@ -39,7 +41,9 @@ export function ActionQueue({
   my,
   aiSignals,
   earnings,
+  intel,
   now,
+  onInfo,
   onOpenConditions,
   onSetCapital,
 }: {
@@ -49,7 +53,9 @@ export function ActionQueue({
   /** 가장 최근 장의 AI 신호. 내 종목 매도 신호와 AI 매수 예정만 쓴다 */
   aiSignals: AiSignal[];
   earnings: HomeEarnings[];
+  intel: HomeResponse["intel"];
   now: Date;
+  onInfo: (target: { symbol: string; nameKo: string | null; nameEn: string }) => void;
   onOpenConditions: () => void;
   onSetCapital: () => void;
 }) {
@@ -99,6 +105,34 @@ export function ActionQueue({
       text: `${displayName(e)} 실적 발표 ${d === 0 ? "오늘" : `D-${d}`}`,
       sub: "발표 날은 크게 움직일 수 있어요. 손절가와 비중을 미리 확인해 두세요",
       href: "/my",
+    });
+  }
+
+  // 내 종목의 새 SEC 공시·중요 뉴스 (3일). 보유 종목부터
+  const news = [...intel.news].sort((a, b) => Number(b.tracked === "holding") - Number(a.tracked === "holding"));
+  for (const n of news.slice(0, 3)) {
+    actions.push({
+      key: `news-${n.id}`,
+      icon: Newspaper,
+      text: `${displayName(n)} ${n.kind === "sec" ? "새 SEC 공시" : "주요 뉴스"} (${n.tracked === "holding" ? "보유" : "관심"})`,
+      sub: n.title,
+      onClick: () => onInfo(n),
+    });
+  }
+
+  // 의원 거래 신고 (30일). 종목별로 묶는다
+  const bySymbol = new Map<string, typeof intel.congress>();
+  for (const c of intel.congress) bySymbol.set(c.symbol, [...(bySymbol.get(c.symbol) ?? []), c]);
+  for (const [, list] of bySymbol) {
+    const buys = list.filter((c) => c.type === "P").length;
+    const latest = list[0];
+    actions.push({
+      key: `congress-${latest.symbol}`,
+      icon: Landmark,
+      muted: true,
+      text: `${displayName(latest)}에 의원 거래 신고 ${list.length}건 (매수 ${buys}, 매도 ${list.length - buys})`,
+      sub: `최근: ${latest.member}, ${latest.amount}. 거래 뒤 늦게 신고되는 공개 자료예요`,
+      onClick: () => onInfo(latest),
     });
   }
 

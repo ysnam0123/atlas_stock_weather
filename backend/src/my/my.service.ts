@@ -366,4 +366,54 @@ export class MyService {
     await this.prisma.trade.deleteMany({ where: { id } });
     return { id };
   }
+
+  // ── 종목 소식 (Phase 3): 뉴스·공시, 분기 실적, 의원 거래 신고 ──
+
+  async intel(symbol: string) {
+    await this.requireSymbol(symbol);
+    const since = (days: number) => new Date(Date.now() - days * DAY_MS);
+    const [news, facts, trades] = await Promise.all([
+      this.prisma.newsItem.findMany({ where: { symbol, publishedAt: { gte: since(30) } }, orderBy: { publishedAt: 'desc' }, take: 30 }),
+      this.prisma.earningsFact.findMany({ where: { symbol }, orderBy: { periodEnd: 'desc' }, take: 6 }),
+      this.prisma.congressTrade.findMany({
+        where: { ticker: symbol, doc: { filed: { gte: since(120) } } },
+        include: { doc: { select: { member: true, filed: true } } },
+        orderBy: { doc: { filed: 'desc' } },
+        take: 30,
+      }),
+    ]);
+    return {
+      symbol,
+      news: news.map((n) => ({
+        id: n.id,
+        kind: n.kind,
+        source: n.source,
+        title: n.title,
+        titleKo: n.titleKo,
+        importance: n.importance,
+        url: n.url,
+        publishedAt: n.publishedAt.toISOString(),
+      })),
+      earnings: facts.map((f) => ({
+        fiscal: f.fiscal,
+        periodEnd: day(f.periodEnd),
+        derived: f.derived,
+        revenue: f.revenue,
+        revenueYoy: f.revenueYoy,
+        operatingMargin: f.operatingMargin,
+        netMargin: f.netMargin,
+        epsDiluted: f.epsDiluted,
+        epsYoy: f.epsYoy,
+      })),
+      congress: trades.map((t) => ({
+        member: t.doc.member.replace(/^Hon\.\s*/, ''),
+        type: t.type,
+        typeName: t.typeName,
+        amount: t.amount,
+        tradeDate: t.tradeDate ? day(t.tradeDate) : null,
+        filed: day(t.doc.filed),
+        owner: t.owner,
+      })),
+    };
+  }
 }

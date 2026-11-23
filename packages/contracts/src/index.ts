@@ -77,6 +77,8 @@ export interface HomeResponse {
   run: { status: RunStatus; startedAt: string; finishedAt: string | null } | null;
   /** 내 보유·관심·AI 보유 종목의 다가오는 실적 발표 */
   earnings: HomeEarnings[];
+  /** 내 보유·관심 종목의 중요한 새 소식(3일)과 의원 거래 신고(30일) */
+  intel: { news: HomeIntelNews[]; congress: HomeIntelCongress[] };
   nextRunAt: string | null;
 }
 
@@ -295,4 +297,67 @@ export interface TradeInput {
   price: number;
   shares: number;
   note: string | null;
+}
+
+// ── Phase 3 종목 소식 ──────────────────────────────────────────────
+
+export interface HomeIntelNews {
+  id: string;
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  tracked: 'holding' | 'watch';
+  kind: 'headline' | 'sec';
+  /** 한국어 번역이 있으면 번역 */
+  title: string;
+  url: string;
+  publishedAt: string;
+}
+
+export interface HomeIntelCongress {
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  tracked: 'holding' | 'watch';
+  member: string;
+  /** P 매수, S 매도, S (partial) 일부 매도, E 교환 */
+  type: string;
+  amount: string;
+  tradeDate: string | null;
+  filed: string;
+}
+
+export interface StockIntel {
+  symbol: string;
+  news: {
+    id: string;
+    kind: 'headline' | 'sec';
+    source: string;
+    title: string;
+    titleKo: string | null;
+    importance: 'high' | 'normal' | null;
+    url: string;
+    publishedAt: string;
+  }[];
+  earnings: {
+    fiscal: string;
+    periodEnd: string;
+    /** 4분기는 연간 − 3개 분기로 만든 값 */
+    derived: boolean;
+    revenue: number | null;
+    revenueYoy: number | null;
+    operatingMargin: number | null;
+    netMargin: number | null;
+    epsDiluted: number | null;
+    epsYoy: number | null;
+  }[];
+  congress: {
+    member: string;
+    type: string;
+    typeName: string;
+    amount: string;
+    tradeDate: string | null;
+    filed: string;
+    owner: string | null;
+  }[];
 }

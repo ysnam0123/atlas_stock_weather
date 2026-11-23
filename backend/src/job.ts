@@ -8,6 +8,7 @@ import { EARNINGS_CALENDAR, EarningsCalendarJob } from './jobs/earnings-calendar
 import { JobsModule } from './jobs/jobs.module.js';
 import { MARKET_DAILY, MarketDailyJob } from './jobs/market-daily.job.js';
 import { PRICES_DAILY, PricesService } from './jobs/prices.service.js';
+import { STOCK_INTEL, StockIntelJob } from './jobs/stock-intel.job.js';
 import { SYMBOLS_WEEKLY, SymbolsWeeklyJob } from './jobs/symbols-weekly.job.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
@@ -26,6 +27,7 @@ const jobs: Record<string, () => Promise<unknown>> = {
   [AI_DAILY]: () => app.get(AiDailyJob).run(),
   [EARNINGS_CALENDAR]: () => app.get(EarningsCalendarJob).run(),
   [COMMENTARY_DAILY]: () => app.get(CommentaryJob).run(),
+  [STOCK_INTEL]: () => app.get(StockIntelJob).run(),
 };
 
 try {

@@ -7,10 +7,11 @@ import { BackfillUptrendJob } from './backfill-uptrend.job.js';
 import { EarningsCalendarJob } from './earnings-calendar.job.js';
 import { MarketDailyJob } from './market-daily.job.js';
 import { PricesService } from './prices.service.js';
+import { StockIntelJob } from './stock-intel.job.js';
 import { SymbolsWeeklyJob } from './symbols-weekly.job.js';
 
 @Module({
-  providers: [SkillRunnerService, MarketDailyJob, BackfillUptrendJob, SymbolsWeeklyJob, PricesService, AiDailyJob, EarningsCalendarJob, ClaudeService, CommentaryJob],
-  exports: [CommentaryJob, EarningsCalendarJob, MarketDailyJob, BackfillUptrendJob, SymbolsWeeklyJob, PricesService, AiDailyJob],
+  providers: [SkillRunnerService, MarketDailyJob, BackfillUptrendJob, SymbolsWeeklyJob, PricesService, AiDailyJob, EarningsCalendarJob, ClaudeService, CommentaryJob, StockIntelJob],
+  exports: [StockIntelJob, CommentaryJob, EarningsCalendarJob, MarketDailyJob, BackfillUptrendJob, SymbolsWeeklyJob, PricesService, AiDailyJob],
 })
 export class JobsModule {}

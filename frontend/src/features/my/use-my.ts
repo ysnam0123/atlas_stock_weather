@@ -1,4 +1,4 @@
-import type { HoldingInput, MyResponse, StopOptionsResponse, SymbolHit } from "@atlas/contracts";
+import type { HoldingInput, MyResponse, StockIntel, StopOptionsResponse, SymbolHit } from "@atlas/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/api/client";
 
@@ -80,5 +80,15 @@ export function useSaveCapital() {
   return useMutation({
     mutationFn: (capital: number | null) => api.put<{ capital: number | null }>("/settings", { capital }),
     onSuccess: done,
+  });
+}
+
+/** 종목 소식 (뉴스·공시, 분기 실적, 의원 거래). 시트를 열 때만 받는다 */
+export function useStockIntel(symbol: string | null) {
+  return useQuery({
+    queryKey: ["intel", symbol],
+    queryFn: () => api.get<StockIntel>(`/stocks/${encodeURIComponent(symbol!)}/intel`),
+    enabled: !!symbol,
+    staleTime: 10 * 60_000,
   });
 }

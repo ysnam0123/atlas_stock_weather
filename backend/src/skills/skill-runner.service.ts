@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { Injectable, Logger } from '@nestjs/common';
@@ -35,6 +35,8 @@ export class SkillRunnerService {
     runId: string,
     skillId: string,
     upstream: Record<string, SkillResult> = {},
+    /** 실행할 때마다 달라지는 인자 (예: 내 종목 티커 목록) */
+    extraArgs: string[] = [],
   ): Promise<SkillResult> {
     const def = this.registry.skills[skillId];
     if (!def) throw new Error(`skills-registry.yaml에 없는 스킬: ${skillId}`);
@@ -46,16 +48,25 @@ export class SkillRunnerService {
 
     try {
       await mkdir(outputDir, { recursive: true });
-      const args = this.buildArgs(def, { outputDir, runId }, upstream);
+      const args = [...this.buildArgs(def, { outputDir, runId }, upstream), ...extraArgs];
       const [cmd, cmdArgs] = this.command(def, args);
-      await run(cmd, cmdArgs, {
-        cwd: repoRoot(),
-        timeout: def.timeoutSec * 1000,
-        maxBuffer: 32 * 1024 * 1024,
-        env: { ...process.env, ...(await this.sslEnv()) },
-      });
+      let stdout = '';
+      try {
+        ({ stdout } = await run(cmd, cmdArgs, {
+          cwd: repoRoot(),
+          timeout: def.timeoutSec * 1000,
+          maxBuffer: 32 * 1024 * 1024,
+          env: { ...process.env, ...(await this.sslEnv()) },
+        }));
+      } catch (err) {
+        // 화면 출력형 스킬은 일부 종목만 실패해도 종료 코드 1을 낸다. 나머지 결과가 있으면 쓴다
+        const out = (err as { stdout?: string }).stdout;
+        if (def.output !== 'stdout' || !out?.trim()) throw err;
+        stdout = out;
+      }
+      if (def.output === 'stdout') await writeFile(join(outputDir, 'stdout.json'), stdout);
 
-      const jsonPath = await this.findOutput(outputDir, def.output);
+      const jsonPath = def.output === 'stdout' ? join(outputDir, 'stdout.json') : await this.findOutput(outputDir, def.output);
       if (!jsonPath) throw new Error(`출력 파일을 찾지 못함: ${def.output}`);
       const json: unknown = JSON.parse(await readFile(jsonPath, 'utf8'));
       const mdPath = jsonPath.replace(/\.json$/, '.md');
@@ -78,6 +89,21 @@ export class SkillRunnerService {
       },
     });
     return result;
+  }
+
+  /**
+   * 등록된 스킬의 스크립트를 다른 인자로 직접 실행하고 화면 출력을 돌려준다.
+   * 문서 수십 개를 하나씩 읽는 경우(의원 거래 PDF)처럼 skill_outputs 줄을 매번 만들지 않을 때 쓴다.
+   * 결과를 모아 저장하는 건 호출한 쪽 몫이다 (절대 규칙 9).
+   */
+  async exec(script: string, args: string[], timeoutSec = 120): Promise<string> {
+    const { stdout } = await run('python3', [script, ...args], {
+      cwd: repoRoot(),
+      timeout: timeoutSec * 1000,
+      maxBuffer: 32 * 1024 * 1024,
+      env: { ...process.env, ...(await this.sslEnv()) },
+    });
+    return stdout;
   }
 
   /** 앞선 스킬이 하나도 없어서 돌릴 수 없을 때 기록만 남긴다 */
