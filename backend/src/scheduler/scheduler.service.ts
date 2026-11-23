@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { AI_DAILY, AiDailyJob } from '../ai/ai-daily.job.js';
+import { COMMENTARY_DAILY, CommentaryJob } from '../claude/commentary.job.js';
 import { BACKFILL_UPTREND, BackfillUptrendJob } from '../jobs/backfill-uptrend.job.js';
 import { MARKET_DAILY, MarketDailyJob } from '../jobs/market-daily.job.js';
 import { EARNINGS_CALENDAR, EarningsCalendarJob } from '../jobs/earnings-calendar.job.js';
@@ -38,6 +39,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly prices: PricesService,
     private readonly aiDaily: AiDailyJob,
     private readonly earnings: EarningsCalendarJob,
+    private readonly commentary: CommentaryJob,
   ) {}
 
   async onApplicationBootstrap() {
@@ -65,6 +67,8 @@ export class SchedulerService implements OnApplicationBootstrap {
       await this.ensure(EARNINGS_CALENDAR, MARKET_DAILY_SLOT, () => this.earnings.run());
       // AI 모의 계좌: 시장 날씨·일봉 다음. 스캔에 몇 분 걸린다
       await this.ensure(AI_DAILY, MARKET_DAILY_SLOT, () => this.aiDaily.run());
+      // Claude 해설: 판정과 AI 신호가 다 나온 뒤. 같은 장 날짜는 다시 만들지 않는다
+      await this.ensure(COMMENTARY_DAILY, MARKET_DAILY_SLOT, () => this.commentary.run());
       await this.ensure(BACKFILL_UPTREND, BACKFILL_UPTREND_SLOT, () => this.backfillUptrend.run());
       await this.ensure(SYMBOLS_WEEKLY, SYMBOLS_WEEKLY_SLOT, () => this.symbolsWeekly.run());
     } catch (err) {

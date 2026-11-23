@@ -26,6 +26,8 @@ export interface HomeWeather {
   exposureMissing: string[];
   /** 시장 점수를 이루는 6개 항목 (0~100, 높을수록 건강) */
   breadthComponents: { key: string; score: number }[] | null;
+  /** Claude 해설 (Phase 4). 아직 없거나 실패했으면 null */
+  commentary: { headline: string; summary: string[]; why: string[] } | null;
   /** FMP 키로 붙는 판정 입력. 스킬이 실패했거나 키가 없으면 null */
   topRiskScore: number | null;
   topRiskZone: string | null;
@@ -211,6 +213,8 @@ export interface AiSignal {
   reasonKo: string;
   /** 줄바꿈으로 나뉜 매도 규칙 */
   exitPlanKo: string | null;
+  /** Claude 한 줄 해설. 판단은 규칙 결과 그대로이고 말로 옮기기만 한다 */
+  commentKo: string | null;
   note: string | null;
   lastClose: number | null;
 }

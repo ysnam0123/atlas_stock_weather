@@ -104,6 +104,9 @@ export class HomeService {
       exposureConfidence: latest.exposureConfidence,
       exposureMissing: latest.exposureMissing,
       breadthComponents: (latest.breadthComponents as { key: string; score: number }[] | null) ?? null,
+      commentary: await this.prisma.commentary
+        .findUnique({ where: { market_tradeDate: { market, tradeDate: latest.tradeDate } } })
+        .then((c) => (c ? { headline: c.headline, summary: c.summary, why: c.why } : null)),
       topRiskScore: latest.topRiskScore,
       topRiskZone: latest.topRiskZone,
       regime: latest.regime,

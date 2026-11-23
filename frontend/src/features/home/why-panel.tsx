@@ -14,7 +14,20 @@ export function WhyPanel({ weather }: { weather: HomeWeather }) {
         왜 이런 날씨인가요
       </SectionTitle>
 
-      {weather.uptrendRatio != null && weather.uptrendPercentile != null && (
+      {weather.commentary && (
+        <ol className="mt-3 space-y-1.5 text-[15px] leading-[1.55]">
+          {weather.commentary.why.map((line, i) => (
+            <li key={line} className="flex gap-2.5">
+              <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary-tint text-[12px] font-semibold text-primary-hover">
+                {i + 1}
+              </span>
+              {line}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {!weather.commentary && weather.uptrendRatio != null && weather.uptrendPercentile != null && (
         <p className="mt-3 text-[15px] leading-[1.55]">
           <Term id="uptrend">상승추세</Term>에 있는 종목이 <span className="font-semibold">{pct(weather.uptrendRatio)}</span>뿐이에요.
           2023년 8월 이후 하위 {weather.uptrendPercentile}% 수준이고

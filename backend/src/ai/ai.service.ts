@@ -215,6 +215,7 @@ export class AiService {
         riskAmount: s.riskAmount,
         reasonKo: s.reasonKo,
         exitPlanKo: s.exitPlanKo,
+        commentKo: s.commentKo,
         note: s.note,
         lastClose: closes.get(s.symbol) ?? null,
       })),

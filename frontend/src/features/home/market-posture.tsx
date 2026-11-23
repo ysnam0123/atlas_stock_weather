@@ -44,53 +44,70 @@ export function MarketPosture({
   const over = exposure != null && ceiling != null ? exposure - ceiling : null;
 
   return (
-    <section aria-label="시장 자세" className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-      <div className="flex items-center gap-4">
-        {cond ? (
-          <>
-            <cond.icon size={44} strokeWidth={1.4} className={`shrink-0 ${cond.color}`} aria-hidden />
-            <div className="min-w-0">
-              <p className="text-[13px] text-text-secondary">{sessionLabel(weather.tradeDate, now)}</p>
-              <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.02em]">
-                {cond.label}, {text!.title}
-              </h1>
-            </div>
-          </>
-        ) : (
-          <h1 className="text-[22px] font-semibold text-text-muted">시장 날씨 데이터 없음</h1>
-        )}
+    <section aria-label="시장 자세">
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-center gap-4">
+          {cond ? (
+            <>
+              <cond.icon size={44} strokeWidth={1.4} className={`shrink-0 ${cond.color}`} aria-hidden />
+              <div className="min-w-0">
+                <p className="text-[13px] text-text-secondary">{sessionLabel(weather.tradeDate, now)}</p>
+                <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.02em]">
+                  {cond.label}, {text!.title}
+                </h1>
+              </div>
+            </>
+          ) : (
+            <h1 className="text-[22px] font-semibold text-text-muted">시장 날씨 데이터 없음</h1>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 xl:shrink-0 xl:gap-x-8">
+          <Stat label={<Term id="exposure">권장 비중</Term>}>{ceiling != null ? `≤${ceiling}%` : "—"}</Stat>
+          <Stat
+            label="내 주식 비중"
+            sub={
+              exposure == null ? null : over != null && over > 0 ? (
+                <span className="text-primary-hover">상한보다 {over.toFixed(0)}%p 높음</span>
+              ) : (
+                <span className="text-text-muted">상한 안</span>
+              )
+            }
+          >
+            {exposure != null ? (
+              `${exposure.toFixed(0)}%`
+            ) : (
+              <button type="button" onClick={onSetCapital} className="pressable text-[15px] font-medium text-primary">
+                총 투자금 넣기
+              </button>
+            )}
+          </Stat>
+          <Stat label="오늘의 자세">{weather.condition ? STANCE[weather.condition] : "—"}</Stat>
+          <Stat
+            label={<Term id="uptrend">오르는 종목</Term>}
+            sub={
+              weather.prevUptrendRatio != null && <span className="text-text-muted">전 거래일 {pct(weather.prevUptrendRatio)}</span>
+            }
+          >
+            {weather.uptrendRatio != null ? pct(weather.uptrendRatio) : "—"}
+          </Stat>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 xl:shrink-0 xl:gap-x-8">
-        <Stat label={<Term id="exposure">권장 비중</Term>}>{ceiling != null ? `≤${ceiling}%` : "—"}</Stat>
-        <Stat
-          label="내 주식 비중"
-          sub={
-            exposure == null ? null : over != null && over > 0 ? (
-              <span className="text-primary-hover">상한보다 {over.toFixed(0)}%p 높음</span>
-            ) : (
-              <span className="text-text-muted">상한 안</span>
-            )
-          }
-        >
-          {exposure != null ? (
-            `${exposure.toFixed(0)}%`
-          ) : (
-            <button type="button" onClick={onSetCapital} className="pressable text-[15px] font-medium text-primary">
-              총 투자금 넣기
-            </button>
-          )}
-        </Stat>
-        <Stat label="오늘의 자세">{weather.condition ? STANCE[weather.condition] : "—"}</Stat>
-        <Stat
-          label={<Term id="uptrend">오르는 종목</Term>}
-          sub={
-            weather.prevUptrendRatio != null && <span className="text-text-muted">전 거래일 {pct(weather.prevUptrendRatio)}</span>
-          }
-        >
-          {weather.uptrendRatio != null ? pct(weather.uptrendRatio) : "—"}
-        </Stat>
-      </div>
+      {/* Claude 해설: 위 숫자를 쉬운 말로. 없으면(실패·아직) 숫자만 보인다 */}
+      {weather.commentary && (
+        <div className="mt-5 rounded-2xl bg-surface px-4 py-3.5">
+          <p className="text-[12px] text-text-muted">Claude 해설</p>
+          <ul className="mt-1.5 space-y-1 text-[15px] leading-[1.55]">
+            {weather.commentary.summary.map((line) => (
+              <li key={line} className="flex gap-2">
+                <span className="mt-[0.6em] size-1 shrink-0 rounded-full bg-text-muted" aria-hidden />
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

@@ -30,6 +30,12 @@ export function SignalCard({ s }: { s: AiSignal }) {
           </span>
           <span className="mt-1 block text-[13px] text-text-muted">{s.setupLabels.join(", ")}</span>
           <span className="mt-1 block text-[14px] leading-[1.5] text-text-secondary">{s.reasonKo}</span>
+          {s.commentKo && (
+            <span className="mt-1.5 block rounded-lg bg-surface px-2.5 py-1.5 text-[13px] leading-[1.5] text-text">
+              <span className="mr-1.5 text-text-muted">해설</span>
+              {s.commentKo}
+            </span>
+          )}
         </span>
         <span className="shrink-0 text-right text-[14px] tabular-nums">
           {usd(s.closePrice)}

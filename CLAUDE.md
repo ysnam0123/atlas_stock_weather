@@ -45,6 +45,8 @@ pnpm --filter backend job backfill_uptrend   # 과거 상승추세·섹터 이�
 pnpm --filter backend job symbols_weekly     # 종목 목록 + 한글명 갱신 (검색용)
 pnpm --filter backend job prices_daily       # 보유·관심 종목 일봉 갱신
 pnpm --filter backend job ai_daily           # AI 모의 계좌 하루 처리 (스캔에 몇 분)
+pnpm --filter backend job commentary_daily   # Claude 해설 (장 날짜마다 한 번, 이미 있으면 건너뜀)
+pnpm --filter backend job earnings_calendar  # 실적 발표 일정 (FMP)
 pnpm --filter backend test        # Adapter·스케줄 단위 테스트 (fixture: backend/test/fixtures/skills)
 pnpm --filter frontend dev         # Next.js
 ```
