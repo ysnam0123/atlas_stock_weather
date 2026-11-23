@@ -109,3 +109,184 @@ model SectorSnapshot {
   @@unique([market, tradeDate, sector])
   @@map("sector_snapshots")
 }
+
+// ── Phase 2: 종목 목록, 내 종목, 일봉 ──────────────────────────────
+
+enum SymbolType {
+  stock
+  etf
+}
+
+// Nasdaq Trader 종목 목록 + 한투 해외주식 마스터 한글명. 주 1회 갱신 (symbols_weekly)
+model Symbol {
+  symbol    String     @id // 거래소 티커 (BRK.B처럼 점 포함 그대로)
+  market    Market     @default(us)
+  exchange  String // NASDAQ | NYSE | NYSE American | NYSE Arca | Cboe BZX
+  nameEn    String
+  nameKo    String? // 한투 마스터에 한글명이 있을 때만
+  type      SymbolType
+  aliases   String[] // 사용자 별칭 (예: 엔비, 테슬)
+  updatedAt DateTime   @updatedAt @db.Timestamptz
+
+  holding   Holding?
+  watchItem WatchItem?
+
+  @@index([nameEn])
+  @@map("symbols")
+}
+
+// 보유 종목. 증권사 계좌 연동 없이 사용자가 직접 입력한다
+model Holding {
+  symbol      String   @id
+  info        Symbol   @relation(fields: [symbol], references: [symbol])
+  shares      Float
+  avgCost     Float // 평단가 (달러)
+  stopPrice   Float? // 손절가
+  stopMethod  String? // percent | atr | support | manual
+  targetPrice Float?
+  note        String?
+  openedAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  @@map("holdings")
+}
+
+model WatchItem {
+  symbol  String   @id
+  info    Symbol   @relation(fields: [symbol], references: [symbol])
+  note    String?
+  addedAt DateTime @default(now()) @db.Timestamptz
+
+  @@map("watchlist")
+}
+
+// 정규장 일봉. date는 뉴욕 장 날짜. 장중 미완성 봉은 저장하지 않는다 (절대 규칙 6)
+model PriceBar {
+  symbol String
+  date   DateTime @db.Date
+  open   Float
+  high   Float
+  low    Float
+  close  Float
+  volume Float
+
+  @@id([symbol, date])
+  @@map("price_bars")
+}
+
+// 사용자 설정 한 줄씩 (예: capital = 총 투자금). 계정이 하나뿐인 개인 앱이라 키-값으로 둔다
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@map("settings")
+}
+
+// ── AI 대결: AI 모의 계좌 vs 내 매매 기록 (2026-11-23) ──────────────────
+// AI는 규칙(backend/src/ai/strategy.ts)대로 신호를 내고 모의로 사고판다. 주문은 하지 않는다 (절대 규칙 1).
+
+model AiAccount {
+  id                String       @id @default(uuid())
+  startCapital      Float
+  cash              Float
+  active            Boolean      @default(true)
+  startedAt         DateTime     @default(now()) @db.Timestamptz
+  /** 마지막으로 처리한 장 날짜. 그 다음 봉부터 체결·청산을 본다 */
+  lastProcessedDate DateTime?    @db.Date
+  signals           AiSignal[]
+  positions         AiPosition[]
+  equity            AiEquity[]
+
+  @@map("ai_accounts")
+}
+
+// 스캐너가 찾은 셋업 하나에 대한 AI의 판단과 계획
+model AiSignal {
+  id          String     @id @default(uuid())
+  accountId   String
+  account     AiAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date        DateTime   @db.Date // 신호가 나온 장 날짜 (그날 종가 기준)
+  symbol      String
+  side        String // buy | sell
+  setups      String[] // breakout_20d, bull_flag, reclaim_ma20, oversold …, sell은 stop | target | ma50 | time
+  verdict     String // buy(다음 날 시가 매수) | hold(시장 때문에 보류) | watch(셋업 약함) | sell
+  status      String // planned | filled | held | watch | skipped | done
+  checks      Json // [{ key, label, pass, detail }]
+  closePrice  Float
+  stopPrice   Float?
+  targetPrice Float?
+  shares      Int?
+  riskAmount  Float?
+  reasonKo    String
+  exitPlanKo  String?
+  note        String? // 체결 못 한 이유 등
+  positionId  String?
+  createdAt   DateTime   @default(now()) @db.Timestamptz
+
+  @@unique([accountId, date, symbol, side])
+  @@index([accountId, date])
+  @@map("ai_signals")
+}
+
+model AiPosition {
+  id          String    @id @default(uuid())
+  accountId   String
+  account     AiAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  signalId    String?
+  symbol      String
+  shares      Int
+  entryDate   DateTime  @db.Date
+  entryPrice  Float
+  stopPrice   Float
+  targetPrice Float
+  status      String // open | closed
+  /** 종가 규칙(50일선 이탈·시간 손절)에 걸려 다음 날 시가에 팔 예정이면 그 이유 */
+  pendingExit String?
+  exitDate    DateTime? @db.Date
+  exitPrice   Float?
+  exitReason  String? // stop | target | ma50 | time
+  pnl         Float?
+
+  @@index([accountId, status])
+  @@map("ai_positions")
+}
+
+model AiEquity {
+  accountId      String
+  account        AiAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date           DateTime  @db.Date
+  cash           Float
+  positionsValue Float
+  equity         Float
+
+  @@id([accountId, date])
+  @@map("ai_equity")
+}
+
+// 내 매매 기록 ("샀음/팔았음"). 기록하면 holdings가 따라 바뀐다
+model Trade {
+  id          String   @id @default(uuid())
+  symbol      String
+  side        String // buy | sell
+  date        DateTime @db.Date
+  price       Float
+  shares      Float
+  /** 팔았을 때 그 시점 평단가 기준 실현 손익 */
+  realizedPnl Float?
+  note        String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@index([date])
+  @@map("trades")
+}
+
+// 내 계좌 가치 일별 기록 (AI와 같은 날 같은 방식으로 비교하려고)
+model MyEquity {
+  date        DateTime @id @db.Date
+  equity      Float
+  marketValue Float
+  realizedPnl Float
+
+  @@map("my_equity")
+}

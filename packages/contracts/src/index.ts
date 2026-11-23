@@ -61,3 +61,218 @@ export interface HomeResponse {
   run: { status: RunStatus; startedAt: string; finishedAt: string | null } | null;
   nextRunAt: string | null;
 }
+
+// ── Phase 2: 종목 검색, 내 종목, 손절가 ──────────────────────────────
+
+export type SymbolType = 'stock' | 'etf';
+
+export interface SymbolHit {
+  symbol: string;
+  exchange: string;
+  nameEn: string;
+  nameKo: string | null;
+  type: SymbolType;
+  /** 이미 내 종목에 있으면 어느 쪽인지 */
+  tracked: 'holding' | 'watch' | null;
+}
+
+interface PriceFields {
+  /** 최근 정규장 종가와 그 장 날짜(뉴욕). 일봉을 아직 못 받았으면 null */
+  lastClose: number | null;
+  lastDate: string | null;
+  changePct: number | null;
+}
+
+export interface MyHolding extends PriceFields {
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  type: SymbolType;
+  exchange: string;
+  shares: number;
+  avgCost: number;
+  stopPrice: number | null;
+  stopMethod: StopMethod | 'manual' | null;
+  targetPrice: number | null;
+  note: string | null;
+  /** 종가가 손절가보다 몇 % 위인지. 0 이하면 손절가 아래로 마감 */
+  stopDistancePct: number | null;
+  pnlPct: number | null;
+  pnl: number | null;
+  marketValue: number | null;
+  /** 종가에서 손절가까지 떨어지면 잃는 돈. 손절가가 없으면 null */
+  openRisk: number | null;
+  openedAt: string;
+  daysHeld: number;
+}
+
+export interface MyWatchItem extends PriceFields {
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  type: SymbolType;
+  exchange: string;
+  note: string | null;
+  addedAt: string;
+}
+
+export interface MySummary {
+  marketValue: number;
+  costBasis: number;
+  openRisk: number;
+  noStopCount: number;
+  /** 총 투자금 대비 주식 비중 (%). 총 투자금을 넣지 않았으면 null */
+  exposurePct: number | null;
+}
+
+export interface MyResponse {
+  /** 총 투자금 (달러). 설정하지 않았으면 null */
+  capital: number | null;
+  summary: MySummary;
+  holdings: MyHolding[];
+  watchlist: MyWatchItem[];
+}
+
+export type StopMethod = 'percent' | 'atr' | 'support';
+
+export interface StopOption {
+  method: StopMethod;
+  stopPrice: number | null;
+  lossPct: number | null;
+  maxLoss: number | null;
+  basis: string;
+}
+
+export interface StopOptionsResponse {
+  symbol: string;
+  avgCost: number;
+  shares: number | null;
+  lastClose: number | null;
+  lastDate: string | null;
+  options: StopOption[];
+}
+
+export interface HoldingInput {
+  /** 산 날짜 YYYY-MM-DD */
+  openedAt?: string | null;
+  shares: number;
+  avgCost: number;
+  stopPrice: number | null;
+  stopMethod: StopMethod | 'manual' | null;
+  targetPrice: number | null;
+  note: string | null;
+}
+
+// ── AI 대결 (AI 모의 계좌 vs 내 매매 기록) ──────────────────────────────
+
+export interface AiCheck {
+  key: string;
+  label: string;
+  pass: boolean;
+  detail: string;
+}
+
+export interface AiSignal {
+  id: string;
+  /** 신호가 나온 장 날짜 (그날 종가 기준) */
+  date: string;
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  side: 'buy' | 'sell';
+  setups: string[];
+  setupLabels: string[];
+  /** buy: 다음 거래일 시가 매수 | hold: 시장 때문에 보류 | watch: 셋업 약함 | sell: 매도 신호 */
+  verdict: 'buy' | 'hold' | 'watch' | 'sell';
+  /** planned → filled | skipped, held, watch, done(매도 신호) */
+  status: 'planned' | 'filled' | 'skipped' | 'held' | 'watch' | 'done';
+  checks: AiCheck[];
+  closePrice: number;
+  stopPrice: number | null;
+  targetPrice: number | null;
+  shares: number | null;
+  riskAmount: number | null;
+  reasonKo: string;
+  /** 줄바꿈으로 나뉜 매도 규칙 */
+  exitPlanKo: string | null;
+  note: string | null;
+  lastClose: number | null;
+}
+
+export interface AiScore {
+  startCapital: number;
+  equity: number;
+  returnPct: number;
+  realizedPnl: number;
+  trades: number;
+  winRate: number | null;
+  maxDrawdownPct: number | null;
+  openPositions: number;
+}
+
+export interface AiPositionRow {
+  id: string;
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  shares: number;
+  entryDate: string;
+  entryPrice: number;
+  stopPrice: number;
+  targetPrice: number;
+  lastClose: number | null;
+  pnl: number | null;
+  pnlPct: number | null;
+  /** 다음 날 시가에 팔 예정이면 그 이유 (ma50 | time) */
+  pendingExit: string | null;
+}
+
+export interface AiClosedRow {
+  id: string;
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  shares: number;
+  entryDate: string;
+  entryPrice: number;
+  exitDate: string | null;
+  exitPrice: number | null;
+  exitReason: string | null;
+  pnl: number | null;
+  pnlPct: number | null;
+}
+
+export interface AiDuelResponse {
+  account: { id: string; startCapital: number; cash: number; startedAt: string; lastProcessedDate: string | null } | null;
+  /** 내 총 투자금. 없으면 내 성적을 잴 수 없다 */
+  capital: number | null;
+  score: { ai: AiScore; me: AiScore | null; benchmarkPct: number | null } | null;
+  /** 대결 시작 = 0%. 날짜별 수익률 */
+  series: { date: string; ai: number | null; me: number | null; spy: number | null }[];
+  positions: AiPositionRow[];
+  closed: AiClosedRow[];
+  signals: AiSignal[];
+  lastRun: { status: RunStatus; startedAt: string; finishedAt: string | null; error: string | null } | null;
+}
+
+export interface TradeRow {
+  id: string;
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  side: 'buy' | 'sell';
+  date: string;
+  price: number;
+  shares: number;
+  realizedPnl: number | null;
+  note: string | null;
+}
+
+export interface TradeInput {
+  symbol: string;
+  side: 'buy' | 'sell';
+  date: string;
+  price: number;
+  shares: number;
+  note: string | null;
+}

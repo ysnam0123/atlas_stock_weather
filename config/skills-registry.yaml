@@ -48,3 +48,12 @@ skills:
       --sector: sector-analyst
     output: exposure_posture_*.json
     timeoutSec: 60
+
+  # ④ day-trader-skill 차트 스캐너, 일봉 종가 모드만 (장중 ORB는 쓰지 않는다). 표준 라이브러리 + 야후, 키 불필요.
+  # 종목 목록은 ai_daily가 symbols 테이블에서 {outputDir}/universe.txt로 미리 써 둔다.
+  trader-scanner:
+    runtime: python3
+    script: vendor/day-trader-skill/trader-scanner/scan.py
+    args: [daily, --universe, '{outputDir}/universe.txt', --out, '{outputDir}/watchlist.json', --json, --quiet]
+    output: watchlist.json
+    timeoutSec: 900

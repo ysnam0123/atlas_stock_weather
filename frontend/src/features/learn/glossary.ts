@@ -1,4 +1,4 @@
-// 용어 뜻은 여기 한 곳에서 관리한다. 화면의 점선 밑줄 용어와 "오늘의 한 줄 공부"가 같이 쓴다.
+// 용어 뜻은 여기 한 곳에서 관리한다. 화면의 점선 밑줄 용어(Term)가 쓴다.
 // 상태를 설명할 뿐, 사라·팔라는 말이나 앞으로의 방향은 쓰지 않는다 (절대 규칙 7).
 
 export const GLOSSARY = {
@@ -45,15 +45,3 @@ export const GLOSSARY = {
 } as const;
 
 export type GlossaryKey = keyof typeof GLOSSARY;
-
-/** 날씨별로 지금 화면과 가까운 용어부터. 장 날짜가 바뀔 때마다 하나씩 돌아간다 */
-const LESSON_ORDER: Record<"clear" | "cloudy" | "rain", GlossaryKey[]> = {
-  rain: ["uptrend", "exposure", "stopLoss", "judgment", "sector", "marketScore", "swing", "regularClose"],
-  cloudy: ["judgment", "stopLoss", "exposure", "uptrend", "sector", "marketScore", "swing", "regularClose"],
-  clear: ["swing", "stopLoss", "sector", "exposure", "marketScore", "uptrend", "judgment", "regularClose"],
-};
-
-export function dailyLesson(dayNumber: number, condition: "clear" | "cloudy" | "rain" | null): GlossaryKey {
-  const order = LESSON_ORDER[condition ?? "rain"];
-  return order[((dayNumber % order.length) + order.length) % order.length];
-}

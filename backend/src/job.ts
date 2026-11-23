@@ -1,9 +1,12 @@
 import './common/env.js';
 import { Logger, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { AI_DAILY, AiDailyJob } from './ai/ai-daily.job.js';
 import { BACKFILL_UPTREND, BackfillUptrendJob } from './jobs/backfill-uptrend.job.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { MARKET_DAILY, MarketDailyJob } from './jobs/market-daily.job.js';
+import { PRICES_DAILY, PricesService } from './jobs/prices.service.js';
+import { SYMBOLS_WEEKLY, SymbolsWeeklyJob } from './jobs/symbols-weekly.job.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
 // 작업 하나를 지금 바로 실행하고 끝낸다: pnpm --filter backend job market_daily
@@ -16,6 +19,9 @@ const app = await NestFactory.createApplicationContext(JobCliModule, { logger: [
 const jobs: Record<string, () => Promise<unknown>> = {
   [MARKET_DAILY]: () => app.get(MarketDailyJob).run(),
   [BACKFILL_UPTREND]: () => app.get(BackfillUptrendJob).run(),
+  [SYMBOLS_WEEKLY]: () => app.get(SymbolsWeeklyJob).run(),
+  [PRICES_DAILY]: () => app.get(PricesService).runDaily(),
+  [AI_DAILY]: () => app.get(AiDailyJob).run(),
 };
 
 try {

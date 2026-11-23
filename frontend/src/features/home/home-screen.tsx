@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useAiDuel } from "@/features/ai/use-ai";
+import { useMy } from "@/features/my/use-my";
 import { CARD, MOBILE_CARD } from "@/shared/ui/card";
+import { ActionQueue } from "./action-queue";
+import { AiSignalCard } from "./ai-signal-card";
 import { BriefingFooter } from "./briefing-footer";
-import { CandidatesSoon } from "./candidates-soon";
-import { ClearConditions } from "./clear-conditions";
-import { DailyLesson } from "./daily-lesson";
-import { DETAIL_ID, MarketDetail } from "./market-detail";
-import { MyStocksEmpty } from "./my-stocks-empty";
-import { SectorBlock } from "./sector-block";
-import { TodayChecks } from "./today-checks";
+import { CapitalSheet } from "./capital-sheet";
+import { MarketDetail } from "./market-detail";
+import { MarketPosture } from "./market-posture";
+import { Positions } from "./positions";
+import { ScheduleCard } from "./schedule-card";
+import { SectorRanking } from "./sector-ranking";
 import { useHome, useRunMarketDaily } from "./use-home";
-import { WeatherHero } from "./weather-hero";
+import { WatchCard } from "./watch-card";
 
 /** 근거를 펼친 뒤 그 자리로 내려간다. 움직임 줄이기 설정이면 바로 이동 */
 function scrollToId(id: string) {
@@ -21,17 +24,19 @@ function scrollToId(id: string) {
   });
 }
 
-const isDesktop = () => window.matchMedia("(min-width: 1024px)").matches;
-
 /**
- * 홈은 결론 → 확인할 것 → 근거 순서다 (docs/frontend.md "아침 모드 구성").
- * 모바일: 카드가 결론 → 확인할 것 → 후보 → 섹터 → 공부 → 자세히 보기 순서로 쌓인다.
- * 데스크톱: 가운데 큰 패널(결론·확인할 것·후보 | 섹터 순위·흐름, 아래로 근거) + 오른쪽 카드 열(다시 맑아지려면, 내 종목, 공부).
+ * 트레이더 홈 (docs/frontend.md "홈 구성"). 트레이더가 아침에 묻는 순서대로:
+ * 시장 자세(날씨·권장 비중·내 비중·자세) → 오늘 할 일 → 보유 종목 → 관심 → 일정 → 섹터 → 흐름과 근거.
+ * 데스크톱: 가운데 큰 패널 + 오른쪽 카드 열(관심, 이번 주). 모바일: 카드가 위 순서로 쌓인다.
  * 모바일 순서를 맞추려고 패널과 오른쪽 열은 모바일에서 display: contents로 풀고 order로 줄 세운다.
  */
 export function HomeScreen() {
   const { data, isPending, isError, refetch } = useHome();
+  // 내 종목은 따로 받는다. 실패해도 시장 화면은 그대로 (절대 규칙 4)
+  const my = useMy();
+  const ai = useAiDuel();
   const [detailOpen, setDetailOpen] = useState(false);
+  const [capitalOpen, setCapitalOpen] = useState(false);
 
   if (isPending) return <HomeSkeleton />;
   if (isError) return <ServerDown onRetry={() => refetch()} />;
@@ -40,69 +45,65 @@ export function HomeScreen() {
   // 데이터가 온 뒤에만 현재 시각을 읽는다 (프리렌더 때는 여기까지 오지 않는다)
   const now = new Date();
   const { weather } = data;
-  const openDetail = (target: string) => {
-    setDetailOpen(true);
-    scrollToId(target);
-  };
+  const openCapital = () => setCapitalOpen(true);
 
   return (
-    <div className="flex flex-col gap-4 pt-2 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5 lg:py-5 lg:pr-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-      {/* 가운데 큰 패널. xl: 왼쪽 위 결론, 그 아래 확인할 것·후보 / 오른쪽 섹터 순위 + 흐름 / 아래로 근거 */}
+    <div className="flex flex-col gap-4 pt-2 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-5 lg:py-5 lg:pr-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      {/* 가운데 큰 패널 */}
       <div className="max-lg:contents lg:grid lg:items-start lg:gap-x-12 lg:gap-y-10 lg:rounded-[24px] lg:border lg:border-border lg:bg-surface-raised lg:p-8 lg:shadow-card xl:grid-cols-2">
-        {/* 왼쪽 칸: 결론 → 확인할 것 → 후보. 모바일에서는 풀려서 카드 하나씩 */}
-        <div className="max-lg:contents lg:space-y-10 xl:col-start-1 xl:row-start-1">
-          <div className={`${MOBILE_CARD} max-lg:order-1`}>
-            {weather ? (
-              <WeatherHero weather={weather} now={now} onWhy={() => openDetail(DETAIL_ID)} />
-            ) : (
-              <p className="text-[17px] text-text-muted">시장 날씨 데이터 없음</p>
-            )}
-          </div>
-          <div className={`${MOBILE_CARD} max-lg:order-2`}>
-            <TodayChecks
-              weather={weather}
-              onOpenConditions={() => (isDesktop() ? scrollToId("clear-title-rail") : openDetail("clear-title"))}
-            />
-          </div>
-          <div className={`${MOBILE_CARD} max-lg:order-3`}>
-            <CandidatesSoon condition={weather?.condition ?? null} />
-          </div>
+        <div className={`${MOBILE_CARD} max-lg:order-1 lg:col-span-full lg:border-b lg:border-border lg:pb-8`}>
+          {weather ? (
+            <MarketPosture weather={weather} my={my.data} now={now} onSetCapital={openCapital} />
+          ) : (
+            <p className="text-[17px] text-text-muted">시장 날씨 데이터 없음</p>
+          )}
         </div>
-        {/* 오른쪽 칸: 섹터 순위 + 흐름 */}
-        <div className={`${MOBILE_CARD} max-lg:order-4 xl:col-start-2 xl:row-start-1`}>
-          <SectorBlock home={data} />
+        <div className={`${MOBILE_CARD} max-lg:order-2`}>
+          <ActionQueue
+            weather={weather}
+            my={my.data}
+            aiSignals={(ai.data?.signals ?? []).filter((s) => s.date === ai.data?.signals[0]?.date)}
+            onSetCapital={openCapital}
+            onOpenConditions={() => {
+              setDetailOpen(true);
+              scrollToId("clear-title");
+            }}
+          />
+        </div>
+        <div className={`${MOBILE_CARD} max-lg:order-6`}>
+          <SectorRanking sectors={data.sectors} />
+        </div>
+        <div className={`${MOBILE_CARD} max-lg:order-3 lg:col-span-full`}>
+          <Positions my={my.data} failed={my.isError} />
         </div>
         <MarketDetail
           home={data}
           open={detailOpen}
           onToggle={() => setDetailOpen((v) => !v)}
-          className={`${MOBILE_CARD} max-lg:order-6 lg:col-span-full lg:border-t lg:border-border lg:pt-8`}
+          className={`${MOBILE_CARD} max-lg:order-7 lg:col-span-full lg:border-t lg:border-border lg:pt-8`}
         />
-        <div className="max-lg:order-7 lg:col-span-full">
+        <div className="max-lg:order-8 lg:col-span-full">
           <BriefingFooter home={data} now={now} />
         </div>
       </div>
 
       {/* 오른쪽 카드 열: 스크롤을 따라오고, 화면 높이를 채운다 */}
       <aside
-        aria-label="조건, 내 종목, 공부"
+        aria-label="관심 종목과 일정"
         className="max-lg:contents lg:sticky lg:top-5 lg:flex lg:h-[calc(100dvh-40px)] lg:flex-col lg:gap-5 lg:overflow-y-auto"
       >
-        {weather && (
-          <div className={`${CARD} max-lg:hidden`}>
-            <ClearConditions weather={weather} titleId="clear-title-rail" />
-          </div>
-        )}
-        {/* 남는 높이는 내 종목 카드가 채운다 (Phase 2에서 목록이 들어갈 자리) */}
-        <div className={`${CARD} max-lg:hidden lg:flex-1`}>
-          <MyStocksEmpty />
+        <div className={`${CARD} max-lg:order-4`}>
+          <AiSignalCard ai={ai.data} failed={ai.isError} />
         </div>
-        {weather && (
-          <div className={`${CARD} max-lg:order-5`}>
-            <DailyLesson tradeDate={weather.tradeDate} condition={weather.condition} />
-          </div>
-        )}
+        <div className={`${CARD} max-lg:order-4 lg:flex-1`}>
+          <WatchCard my={my.data} failed={my.isError} condition={weather?.condition ?? null} />
+        </div>
+        <div className={`${CARD} max-lg:order-5`}>
+          <ScheduleCard />
+        </div>
       </aside>
+
+      <CapitalSheet open={capitalOpen} capital={my.data?.capital ?? null} onClose={() => setCapitalOpen(false)} />
     </div>
   );
 }

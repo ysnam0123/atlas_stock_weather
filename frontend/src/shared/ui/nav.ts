@@ -1,4 +1,4 @@
-import { House, LayoutGrid, NotebookPen, Star, type LucideIcon } from "lucide-react";
+import { House, LayoutGrid, NotebookPen, Star, Swords, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -19,13 +19,14 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "내 투자",
     items: [
       { href: "/my", label: "내 종목", icon: Star },
+      { href: "/ai", label: "AI 대결", icon: Swords },
       { href: "/records", label: "기록", icon: NotebookPen },
     ],
   },
 ];
 
-/** 모바일 탭바 순서 */
-export const NAV: NavItem[] = ["/", "/my", "/records", "/sectors"].map(
+/** 모바일 탭바 순서. 섹터 지도는 홈의 섹터 순위에서 들어간다 */
+export const NAV: NavItem[] = ["/", "/my", "/ai", "/records"].map(
   (href) => NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === href)!,
 );
 

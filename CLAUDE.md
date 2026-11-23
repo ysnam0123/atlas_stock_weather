@@ -10,6 +10,7 @@ Atlas는 미국장이 끝난 뒤 자동으로 시장·섹터·내 종목을 분�
 | `docs/skills.md` | 사용하는 스킬 목록, 호출 방법, 데이터 출처 |
 | `docs/frontend.md` | 페이지, 홈 모드, 화면 구성, 디자인 토큰, 상태 처리 |
 | `docs/roadmap.md` | 개발 순서, 1일차 체크리스트, 미확정 사항 |
+| `docs/ai-duel.md` | AI 대결: AI 모의 계좌 규칙, 성적 계산, 화면 |
 
 ## 스택
 
@@ -26,7 +27,7 @@ Atlas는 미국장이 끝난 뒤 자동으로 시장·섹터·내 종목을 분�
 4. **스킬 하나가 실패해도 전체가 멈추지 않는다.** 실패는 해당 카드만 "데이터 없음"으로 표시한다.
 5. **화면의 모든 시각은 한국 시간(KST).** 원본 데이터의 뉴욕 시간은 저장 시 변환한다.
 6. **가격은 정규장 종가 기준.** 실시간 가격은 만들지 않는다(증권사 앱 몫). 화면에 기준을 명시한다.
-7. **판정은 예측이 아니다.** "예보", "상승 확률" 같은 표현을 쓰지 않는다. 날씨는 "현재 상태"다.
+7. **판정은 예측이 아니다.** "예보", "상승 확률" 같은 표현을 쓰지 않는다. 날씨는 "현재 상태"다. AI 매매 신호는 "AI 규칙 신호"로 표시하고 근거(체크리스트)와 계획을 같이 보여준다. 선택은 사용자 몫이다 (2026-11-23 사용자 결정).
 8. **API 키는 코드에 넣지 않는다.** 전부 `.env`로 받는다.
 9. 스킬 원본 출력은 `skill_outputs`에 jsonb로 통째 저장하고, 화면용 값은 Adapter가 정규화 테이블로 뽑는다.
 
@@ -41,6 +42,9 @@ pnpm --filter backend dev         # NestJS API
 pnpm --filter backend worker      # 스케줄러 + 분석 워커 (켜 두면 밀린 실행을 자동 보충)
 pnpm --filter backend job market_daily   # 시장 날씨 수집을 지금 한 번 실행
 pnpm --filter backend job backfill_uptrend   # 과거 상승추세·섹터 이력 채우기 (이미 있는 날은 건너뜀)
+pnpm --filter backend job symbols_weekly     # 종목 목록 + 한글명 갱신 (검색용)
+pnpm --filter backend job prices_daily       # 보유·관심 종목 일봉 갱신
+pnpm --filter backend job ai_daily           # AI 모의 계좌 하루 처리 (스캔에 몇 분)
 pnpm --filter backend test        # Adapter·스케줄 단위 테스트 (fixture: backend/test/fixtures/skills)
 pnpm --filter frontend dev         # Next.js
 ```

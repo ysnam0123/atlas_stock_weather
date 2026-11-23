@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/shared/ui/coming-soon";
+import { RecordsScreen } from "@/features/records/records-screen";
 
 export default function RecordsPage() {
-  return <ComingSoon title="기록" when="Phase 6" />;
+  return <RecordsScreen />;
 }

@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/shared/ui/coming-soon";
+import { MyScreen } from "@/features/my/my-screen";
 
 export default function MyPage() {
-  return <ComingSoon title="내 종목" when="Phase 2" />;
+  return <MyScreen />;
 }

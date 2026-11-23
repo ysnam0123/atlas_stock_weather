@@ -1,7 +1,10 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { AI_DAILY, AiDailyJob } from '../ai/ai-daily.job.js';
 import { BACKFILL_UPTREND, BackfillUptrendJob } from '../jobs/backfill-uptrend.job.js';
 import { MARKET_DAILY, MarketDailyJob } from '../jobs/market-daily.job.js';
+import { PRICES_DAILY, PricesService } from '../jobs/prices.service.js';
+import { SYMBOLS_WEEKLY, SymbolsWeeklyJob } from '../jobs/symbols-weekly.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestDueSlot, type Slot } from './slots.js';
 
@@ -15,6 +18,9 @@ export const MARKET_DAILY_SLOT: Slot = { days: [2, 3, 4, 5, 6], times: ['13:30',
 /** 워커가 꺼져 있던 날의 상승추세·섹터 값을 주 1회 메운다 (시장 점수는 못 메운다) */
 const BACKFILL_UPTREND_SLOT: Slot = { days: [0], times: ['10:00'] };
 
+/** 종목 목록(Nasdaq Trader + 한투 마스터 한글명)은 주 1회면 충분하다 */
+const SYMBOLS_WEEKLY_SLOT: Slot = { days: [0], times: ['09:00'] };
+
 /** 한 실행 시각에서 실패가 이만큼 쌓이면 다음 시각까지 다시 시도하지 않는다 */
 const MAX_ATTEMPTS_PER_SLOT = 3;
 
@@ -27,6 +33,9 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly marketDaily: MarketDailyJob,
     private readonly backfillUptrend: BackfillUptrendJob,
+    private readonly symbolsWeekly: SymbolsWeeklyJob,
+    private readonly prices: PricesService,
+    private readonly aiDaily: AiDailyJob,
   ) {}
 
   async onApplicationBootstrap() {
@@ -48,7 +57,12 @@ export class SchedulerService implements OnApplicationBootstrap {
     this.ticking = true;
     try {
       await this.ensure(MARKET_DAILY, MARKET_DAILY_SLOT, () => this.marketDaily.run());
+      // 보유·관심 종목 일봉: 시장 날씨와 같은 시각. 실패해도 시장 날씨와 따로 다시 시도한다
+      await this.ensure(PRICES_DAILY, MARKET_DAILY_SLOT, () => this.prices.runDaily());
+      // AI 모의 계좌: 시장 날씨·일봉 다음. 스캔에 몇 분 걸린다
+      await this.ensure(AI_DAILY, MARKET_DAILY_SLOT, () => this.aiDaily.run());
       await this.ensure(BACKFILL_UPTREND, BACKFILL_UPTREND_SLOT, () => this.backfillUptrend.run());
+      await this.ensure(SYMBOLS_WEEKLY, SYMBOLS_WEEKLY_SLOT, () => this.symbolsWeekly.run());
     } catch (err) {
       this.logger.error(err instanceof Error ? err.stack : String(err));
     } finally {

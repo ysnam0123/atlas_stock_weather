@@ -91,3 +91,74 @@ body {
     opacity: 0.7;
   }
 }
+
+/* 시트: 모바일은 아래에서 올라오고, 데스크톱은 가운데 창. 감쇠 1.0에 가까운 곡선, 겹침 없음 */
+.sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 92dvh;
+  padding: 0;
+  border: 0;
+  border-radius: 24px 24px 0 0;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: 0 -8px 40px rgb(24 24 24 / 0.12);
+  transform: translateY(0);
+  transition:
+    transform 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms ease,
+    overlay 320ms allow-discrete,
+    display 320ms allow-discrete;
+}
+.sheet:not([open]) {
+  transform: translateY(100%);
+}
+@starting-style {
+  .sheet[open] {
+    transform: translateY(100%);
+  }
+}
+.sheet::backdrop {
+  background: rgb(24 24 24 / 0.32);
+  opacity: 1;
+  transition: opacity 240ms ease, overlay 320ms allow-discrete, display 320ms allow-discrete;
+}
+@starting-style {
+  .sheet[open]::backdrop {
+    opacity: 0;
+  }
+}
+@media (min-width: 1024px) {
+  .sheet {
+    margin: auto;
+    border-radius: 24px;
+    max-height: 86dvh;
+    box-shadow: 0 24px 60px rgb(24 24 24 / 0.18);
+  }
+  .sheet:not([open]) {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  @starting-style {
+    .sheet[open] {
+      transform: translateY(12px);
+      opacity: 0;
+    }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet:not([open]) {
+    transform: none;
+  }
+  .sheet:not([open]) {
+    opacity: 0;
+  }
+  @starting-style {
+    .sheet[open] {
+      transform: none;
+      opacity: 0;
+    }
+  }
+}
