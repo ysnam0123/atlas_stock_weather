@@ -51,22 +51,20 @@ export function AiSignalCard({ ai, failed }: { ai: AiDuelResponse | undefined; f
           {today.slice(0, SHOW).map((s) => {
             const v = VERDICT[s.verdict];
             return (
-              <li key={s.id} className="flex items-center gap-3 border-b border-border py-2.5 last:border-b-0">
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium ${v.className}`}>{v.text}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-2">
-                    <span className="text-[15px] font-semibold">{s.symbol}</span>
-                    <span className="truncate text-[13px] text-text-secondary">{displayName(s)}</span>
-                  </span>
-                  <span className="block truncate text-[12px] text-text-muted">{s.setupLabels.join(", ")}</span>
-                </span>
+              <li key={s.id} className="border-b border-border last:border-b-0">
                 <Link
                   href={`/stocks/${encodeURIComponent(s.symbol)}`}
-                  aria-label={`${displayName(s)} 종목 보기`}
-                  className="pressable inline-flex min-h-9 shrink-0 items-center gap-0.5 rounded-full border border-border pr-2 pl-3 text-[13px] text-text-secondary hover:border-text-muted hover:text-text"
+                  className="pressable -mx-2 flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-surface"
                 >
-                  종목
-                  <ChevronRight size={14} aria-hidden />
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium ${v.className}`}>{v.text}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-[15px] font-semibold">{s.symbol}</span>
+                      <span className="truncate text-[13px] text-text-secondary">{displayName(s)}</span>
+                    </span>
+                    <span className="block truncate text-[12px] text-text-muted">{s.setupLabels.join(", ")}</span>
+                  </span>
+                  <ChevronRight size={16} className="shrink-0 text-text-muted" aria-hidden />
                 </Link>
               </li>
             );
