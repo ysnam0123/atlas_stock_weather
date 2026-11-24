@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { stopOptions } from '../holdings/stop-options.js';
 import { BENCHMARK } from '../ai/ai-daily.job.js';
 import type { Bar, Condition } from '../ai/strategy.js';
-import { evaluateBuyV2 } from '../ai/strategy-v2.js';
+import { evaluateBuyV2, mySize } from '../ai/strategy-v2.js';
 import { lookupMembers } from '../jobs/congress-members.js';
 
 interface ScanHit {
@@ -221,7 +221,7 @@ export class MyService {
           note: w.note,
           addedAt: w.addedAt.toISOString(),
           ...price(w.symbol),
-          readiness: await this.readiness(w.symbol, scan),
+          readiness: await this.readiness(w.symbol, scan, capital),
         })),
       ),
     };
@@ -247,7 +247,7 @@ export class MyService {
    * 관심 종목을 AI v2 매수 규칙으로 본다 (계산은 전부 스크립트, 절대 규칙 2).
    * 셋업은 그날 스캔 결과에서 가져오고, 스캔에 없으면 셋업 없음으로 본다.
    */
-  private async readiness(symbol: string, scan: ScanContext) {
+  private async readiness(symbol: string, scan: ScanContext, capital: number | null) {
     const bars = await this.bars(symbol);
     if (bars.length < 30) return null;
     const last = bars.at(-1)!;
@@ -267,7 +267,15 @@ export class MyService {
     });
     // 스캔에 없던 종목은 "셋업 없음"으로 보여준다
     const checks = e.checks.map((c) => (c.key === 'setup' && !c.detail ? { ...c, detail: '오늘 찾은 셋업 없음' } : c));
-    return { date: last.date, verdict: e.verdict, checks, reasonKo: e.reasonKo, stopPrice: e.stopPrice };
+    return {
+      date: last.date,
+      verdict: e.verdict,
+      checks,
+      reasonKo: e.reasonKo,
+      triggerPrice: e.triggerPrice,
+      stopPrice: e.stopPrice,
+      mySize: e.verdict === 'watch' ? null : mySize(capital, e.triggerPrice, e.stopPrice),
+    };
   }
 
   private async requireSymbol(symbol: string) {

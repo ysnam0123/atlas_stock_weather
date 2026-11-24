@@ -1,5 +1,5 @@
 // AI 모의 계좌의 매매 규칙 "추세 추종 스윙 v1". 전부 결정론적 계산이다 (절대 규칙 2).
-// 스캐너(trader-scanner)가 찾은 셋업 → 이 규칙이 판단·계획 → ai_daily가 다음 날 시가에 모의 체결.
+// 스캐너(trader-scanner)가 찾은 셋업 → 이 규칙이 판단·계획 → ai_daily가 조건부 매수로 모의 체결.
 // 규칙을 바꾸면 docs/ai-duel.md와 화면 문구도 같이 바꾼다.
 
 export interface Bar {
@@ -23,7 +23,7 @@ export const RULES = {
   atrPeriod: 14,
   /** 손절가 = 신호 종가 − ATR × 2 */
   atrMult: 2,
-  /** 목표가 = 신호 종가 + 위험폭 × 2 (손익비 2) */
+  /** 목표가 = 조건부 매수가 + 위험폭 × 2 (손익비 2) */
   rewardRisk: 2,
   /** 거래량이 50일 평균의 이 배수 이상이면 돌파 확인 */
   volumeMult: 1.2,
@@ -77,10 +77,28 @@ export function atr(bars: Bar[], period: number = RULES.atrPeriod): number | nul
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * 조건부 매수 (가격이 오르면 사는 주문, buy stop). 신호 날 고가를 1센트 넘으면 산다.
+ * 다음 날 더 오르는 것을 확인하고 사는 방식이라, 돌파 직후 바로 꺾이는 종목은 사지 않게 된다.
+ * 이 거래일 안에 넘지 않으면 주문을 취소한다.
+ */
+export const ENTRY = { offset: 0.01, validDays: 3 } as const;
+
+export const triggerPrice = (signalBar: Bar) => round2(signalBar.high + ENTRY.offset);
+
+/** 이 봉에서 조건부 매수가 체결되는 가격. 시가가 이미 위면 시가, 장중에 넘으면 조건 가격, 못 넘으면 null */
+export function fillBuyStop(trigger: number, bar: Bar): number | null {
+  if (bar.open >= trigger) return bar.open;
+  if (bar.high >= trigger) return trigger;
+  return null;
+}
+
 export interface BuyEvaluation {
   verdict: 'buy' | 'hold' | 'watch';
   checks: Check[];
   closePrice: number;
+  /** 조건부 매수가 (신호 날 고가 + 1센트) */
+  triggerPrice: number;
   stopPrice: number | null;
   targetPrice: number | null;
   reasonKo: string;
@@ -152,26 +170,27 @@ export function evaluateBuy(input: {
   const stockOk = checks.filter((c) => c.key !== 'market').every((c) => c.pass);
   const verdict: BuyEvaluation['verdict'] = !stockOk ? 'watch' : condition === 'clear' ? 'buy' : 'hold';
 
+  const trigger = triggerPrice(last);
   let stopPrice: number | null = null;
   let targetPrice: number | null = null;
   let exitPlanKo: string | null = null;
   if (a != null && a > 0) {
     stopPrice = round2(last.close - a * RULES.atrMult);
-    const risk = last.close - stopPrice;
-    targetPrice = round2(last.close + risk * RULES.rewardRisk);
-    exitPlanKo = exitPlan(last.close, stopPrice, targetPrice);
+    const risk = trigger - stopPrice;
+    targetPrice = round2(trigger + risk * RULES.rewardRisk);
+    exitPlanKo = exitPlan(trigger, stopPrice, targetPrice);
   }
 
   // 셋업 이름은 화면에 따로 나오므로 판단 문장에서는 되풀이하지 않는다
   const failed = checks.filter((c) => !c.pass && c.key !== 'market').map((c) => c.label);
   const reasonKo =
     verdict === 'buy'
-      ? '종목 조건을 모두 통과했고 시장도 맑아서 다음 거래일 시가에 삽니다.'
+      ? `종목 조건을 모두 통과했고 시장도 맑아서, ${ENTRY.validDays}거래일 안에 ${usd(trigger)}(오늘 고가 위)를 넘으면 삽니다.`
       : verdict === 'hold'
         ? '종목 조건은 모두 통과했지만 시장이 맑지 않아 보류합니다. 맑아진 날 같은 신호가 나오면 삽니다.'
         : `${failed.join(', ')} 조건에서 걸려 관찰만 합니다.`;
 
-  return { verdict, checks, closePrice: last.close, stopPrice, targetPrice, reasonKo, exitPlanKo };
+  return { verdict, checks, closePrice: last.close, triggerPrice: trigger, stopPrice, targetPrice, reasonKo, exitPlanKo };
 }
 
 export function exitPlan(entry: number, stop: number, target: number): string {

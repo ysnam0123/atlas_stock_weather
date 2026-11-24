@@ -138,6 +138,15 @@ export interface MyWatchItem extends PriceFields {
   readiness: WatchReadiness | null;
 }
 
+/** 규칙으로 계산한 수량 (position-sizer 고정 비율 방식) */
+export interface PositionSize {
+  shares: number;
+  /** 조건부 매수가 × 수량 */
+  amount: number;
+  /** 손절되면 잃는 돈 */
+  risk: number;
+}
+
 /** 관심 종목이 왜 매수 대기인지: AI v2 매수 규칙 체크리스트 (docs/ai-duel.md) */
 export interface WatchReadiness {
   /** 판단한 장 날짜 (뉴욕) */
@@ -146,8 +155,11 @@ export interface WatchReadiness {
   verdict: 'buy' | 'hold' | 'watch';
   checks: AiCheck[];
   reasonKo: string;
-  /** 지금 산다면 규칙상 손절가 */
+  /** 조건부 매수가와 규칙상 손절가 */
+  triggerPrice: number;
   stopPrice: number | null;
+  /** 내 총 투자금 기준 수량 */
+  mySize: PositionSize | null;
 }
 
 export interface MySummary {
@@ -216,12 +228,16 @@ export interface AiSignal {
   side: 'buy' | 'sell';
   setups: string[];
   setupLabels: string[];
-  /** buy: 다음 거래일 시가 매수 | hold: 시장 때문에 보류 | watch: 셋업 약함 | sell: 매도 신호 */
+  /** buy: 조건부 매수 | hold: 시장 때문에 보류 | watch: 셋업 약함 | sell: 매도 신호 */
   verdict: 'buy' | 'hold' | 'watch' | 'sell';
-  /** planned → filled | skipped, held, watch, done(매도 신호) */
-  status: 'planned' | 'filled' | 'skipped' | 'held' | 'watch' | 'done';
+  /** planned(주문 대기) → filled | expired(3거래일 안에 못 넘음) | skipped, held, watch, done(매도 신호) */
+  status: 'planned' | 'filled' | 'expired' | 'skipped' | 'held' | 'watch' | 'done';
   checks: AiCheck[];
   closePrice: number;
+  /** 조건부 매수가: 이 가격을 넘으면 산다 (신호 날 고가 + 1센트). 예전 신호는 null */
+  triggerPrice: number | null;
+  /** 내 총 투자금으로 같은 규칙(위험 1%, 종목당 20%)을 적용한 수량. 총 투자금이 없으면 null */
+  mySize: PositionSize | null;
   stopPrice: number | null;
   targetPrice: number | null;
   shares: number | null;

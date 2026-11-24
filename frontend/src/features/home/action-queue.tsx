@@ -46,7 +46,7 @@ export function ActionQueue({
   weather: HomeWeather | null;
   /** 불러오는 중이거나 실패하면 undefined. 그때는 내 종목 줄만 빠진다 */
   my: MyResponse | undefined;
-  /** 가장 최근 장의 AI 신호. 내 종목 매도 신호와 AI 매수 예정만 쓴다 */
+  /** 가장 최근 장의 AI 신호. 내 종목 매도 신호와 AI 조건부 주문만 쓴다 */
   aiSignals: AiSignal[];
   earnings: HomeEarnings[];
   now: Date;
@@ -174,7 +174,7 @@ export function ActionQueue({
     actions.push({
       key: "ai-buy",
       icon: Swords,
-      text: `AI가 다음 거래일 시가에 ${buys.map((b) => b.symbol).join(", ")}를 삽니다`,
+      text: `AI 조건부 주문: ${buys.map((b) => (b.triggerPrice != null ? `${b.symbol} $${b.triggerPrice.toFixed(2)} 넘으면` : b.symbol)).join(", ")}`,
       sub: "모의 계좌예요. 나라면 어떻게 할지 정해 보세요",
       href: "/ai",
     });

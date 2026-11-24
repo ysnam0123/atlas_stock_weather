@@ -2,7 +2,7 @@
 // 근거: 미너비니 추세 템플릿, 오닐 CANSLIM(7~8% 손절, 돌파 거래량, 주도주), 추세 추종의 "이익은 길게".
 // 전부 결정론적 계산이다 (절대 규칙 2).
 
-import { atr, type Bar, type Check, type Condition, SETUP_LABEL, sma, type Step } from './strategy.js';
+import { atr, type Bar, type Check, type Condition, ENTRY, SETUP_LABEL, sma, type Step, triggerPrice } from './strategy.js';
 
 export const RULES_V2 = {
   riskPct: 0.01,
@@ -24,7 +24,7 @@ export const RULES_V2 = {
   ma200RisingDays: 21,
   /** 상대 강도: 최근 126거래일(약 6개월) 수익률이 S&P 500보다 높아야 한다 */
   rsDays: 126,
-  /** 시가가 신호 종가보다 이만큼 넘게 높으면 추격하지 않는다 */
+  /** 시가가 조건부 매수가보다 이만큼 넘게 높게 시작하면 추격하지 않는다 */
   maxGapPct: 0.03,
   /** 실적 발표까지 이 거래일 안이면 사지 않는다 (달력일로 7일) */
   earningsDays: 7,
@@ -52,6 +52,8 @@ export interface BuyEvaluationV2 {
   verdict: 'buy' | 'hold' | 'watch';
   checks: Check[];
   closePrice: number;
+  /** 조건부 매수가 (신호 날 고가 + 1센트) */
+  triggerPrice: number;
   stopPrice: number | null;
   targetPrice: null;
   reasonKo: string;
@@ -163,23 +165,24 @@ export function evaluateBuyV2(input: {
   const stockOk = checks.filter((c) => c.key !== 'market').every((c) => c.pass);
   const verdict: BuyEvaluationV2['verdict'] = !stockOk ? 'watch' : condition === 'clear' ? 'buy' : 'hold';
 
+  const trigger = triggerPrice(last);
   let stopPrice: number | null = null;
   let exitPlanKo: string | null = null;
   if (a != null && a > 0) {
-    // ATR 손절과 −8% 손절 중 가까운 쪽 (손실이 작은 쪽)
-    stopPrice = round2(Math.max(last.close - a * RULES_V2.atrMult, last.close * (1 - RULES_V2.maxLossPct)));
-    exitPlanKo = exitPlanV2(last.close, stopPrice);
+    // ATR 손절과 −8% 손절 중 가까운 쪽 (손실이 작은 쪽). −8%는 조건부 매수가 기준
+    stopPrice = round2(Math.max(last.close - a * RULES_V2.atrMult, trigger * (1 - RULES_V2.maxLossPct)));
+    exitPlanKo = exitPlanV2(trigger, stopPrice);
   }
 
   const failed = checks.filter((c) => !c.pass && c.key !== 'market').map((c) => c.label);
   const reasonKo =
     verdict === 'buy'
-      ? '종목 조건 8개를 모두 통과했고 시장도 맑아서 다음 거래일 시가에 삽니다. 시가가 3% 넘게 뛰면 추격하지 않아요.'
+      ? `종목 조건 8개를 모두 통과했고 시장도 맑아서, ${ENTRY.validDays}거래일 안에 ${usd(trigger)}(오늘 고가 위)를 넘으면 삽니다. 시가가 그보다 3% 넘게 높게 시작하면 추격하지 않아요.`
       : verdict === 'hold'
         ? '종목 조건 8개를 모두 통과했지만 시장이 맑지 않아 보류합니다.'
         : `${failed.join(', ')} 조건에서 걸려 관찰만 합니다.`;
 
-  return { verdict, checks, closePrice: last.close, stopPrice, targetPrice: null, reasonKo, exitPlanKo };
+  return { verdict, checks, closePrice: last.close, triggerPrice: trigger, stopPrice, targetPrice: null, reasonKo, exitPlanKo };
 }
 
 export function exitPlanV2(entry: number, stop: number): string {
@@ -240,4 +243,11 @@ export function sizePositionV2(input: { equity: number; cash: number; entry: num
   const byCap = (input.equity * RULES_V2.maxPositionPct) / input.entry;
   const byCash = input.cash / input.entry;
   return Math.max(0, Math.floor(Math.min(byRisk, byCap, byCash)));
+}
+
+/** 내 계좌 기준 수량: 총 투자금에 같은 규칙(위험 1%, 종목당 20%)을 적용. 현금은 총 투자금으로 본다 */
+export function mySize(capital: number | null, entry: number | null, stop: number | null) {
+  if (!capital || entry == null || stop == null) return null;
+  const shares = sizePositionV2({ equity: capital, cash: capital, entry, stop, riskPct: RULES_V2.riskPct });
+  return shares > 0 ? { shares, amount: shares * entry, risk: shares * (entry - stop) } : null;
 }

@@ -1,4 +1,4 @@
-import { type Bar, evaluateBuy, evaluateHolding, RULES, sizePosition, stepPosition } from './strategy.js';
+import { type Bar, evaluateBuy, evaluateHolding, fillBuyStop, RULES, sizePosition, stepPosition } from './strategy.js';
 
 /** 꾸준히 오르다 마지막 날 거래량이 터지는 일봉 */
 function uptrend(n = 220, lastVolumeMult = 2): Bar[] {
@@ -21,8 +21,10 @@ describe('evaluateBuy', () => {
     expect(e.verdict).toBe('buy');
     expect(e.checks.every((c) => c.pass)).toBe(true);
     expect(e.stopPrice).toBeLessThan(e.closePrice);
-    // 손익비 2
-    expect(e.targetPrice! - e.closePrice).toBeCloseTo((e.closePrice - e.stopPrice!) * RULES.rewardRisk, 1);
+    // 조건부 매수가 = 신호 날 고가 + 1센트, 손익비 2는 조건부 매수가 기준
+    const last = uptrend().at(-1)!;
+    expect(e.triggerPrice).toBeCloseTo(last.high + 0.01, 2);
+    expect(e.targetPrice! - e.triggerPrice).toBeCloseTo((e.triggerPrice - e.stopPrice!) * RULES.rewardRisk, 1);
     expect(e.exitPlanKo).toContain('50일선');
   });
 
@@ -37,6 +39,16 @@ describe('evaluateBuy', () => {
     const weak = evaluateBuy({ setups: ['breakout_20d'], rsi: 60, bars: uptrend(220, 1), condition: 'clear' });
     expect(weak.verdict).toBe('watch');
     expect(weak.reasonKo).toContain('거래량 확인');
+  });
+});
+
+describe('fillBuyStop', () => {
+  const bar = (o: number, h: number): Bar => ({ date: 'x', open: o, high: h, low: o - 1, close: o, volume: 1 });
+
+  it('장중에 넘으면 조건 가격, 시가가 이미 위면 시가, 못 넘으면 미체결', () => {
+    expect(fillBuyStop(100, bar(98, 101))).toBe(100);
+    expect(fillBuyStop(100, bar(102, 104))).toBe(102);
+    expect(fillBuyStop(100, bar(98, 99.9))).toBeNull();
   });
 });
 

@@ -44,7 +44,7 @@ export function AiScreen() {
             <h1 className="text-[24px] font-semibold tracking-[-0.02em]">AI 대결</h1>
             <p className="mt-1 text-[14px] leading-[1.55] text-text-secondary">
               규칙이 다른 AI 두 개가 같은 자금으로 모의 계좌를 굴려요. 매일 차트 스캐너가 찾은 같은 셋업을 각자 자기 규칙으로
-              판단하고, 통과하면 다음 거래일 시가에 사서 규칙대로 팝니다. 실제 주문은 하지 않아요. 나는 &ldquo;기록&rdquo;에
+              판단하고, 통과하면 &ldquo;신호 날 고가를 넘으면 산다&rdquo;는 조건부 주문을 걸어 규칙대로 사고팝니다. 실제 주문은 하지 않아요. 나는 &ldquo;기록&rdquo;에
               샀음·팔았음을 남기면 같은 기준으로 성적이 매겨져요.
             </p>
           </div>

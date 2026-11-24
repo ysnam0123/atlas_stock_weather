@@ -147,7 +147,16 @@ function WatchRow({
                 ))}
               </ul>
               {r.verdict !== "watch" && r.stopPrice != null && (
-                <p className="mt-2 text-[13px] text-text-secondary">지금 산다면 규칙상 손절가 {usd(r.stopPrice)}</p>
+                <p className="mt-2 rounded-lg bg-surface px-3 py-2 text-[13px] leading-[1.5] tabular-nums">
+                  {r.verdict === "hold" && "시장이 맑아지면 "}
+                  {usd(r.triggerPrice)} 넘으면 매수, 손절가 {usd(r.stopPrice)}
+                  {r.mySize && (
+                    <>
+                      . 내 계좌라면 <span className="font-semibold">{r.mySize.shares}주</span> ({usd(r.mySize.amount)}), 손절되면{" "}
+                      {usd(r.mySize.risk)}
+                    </>
+                  )}
+                </p>
               )}
             </>
           ) : (

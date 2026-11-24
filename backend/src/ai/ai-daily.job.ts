@@ -9,9 +9,11 @@ import { SkillRunnerService } from '../skills/skill-runner.service.js';
 import {
   type Bar,
   type Condition,
+  ENTRY,
   EXIT_LABEL,
   evaluateBuy,
   evaluateHolding,
+  fillBuyStop,
   RULES,
   sizePosition,
   sma,
@@ -126,7 +128,11 @@ export class AiDailyJob {
     }
   }
 
-  /** 계획된 매수 신호를 신호 다음 거래일 시가에 체결한다. v2는 3% 넘는 갭 상승을 추격하지 않는다 */
+  /**
+   * 조건부 매수 주문(planned)을 신호 다음 거래일부터 봉 하나씩 본다 (strategy.ts ENTRY).
+   * 고가가 조건 가격을 넘은 첫날 체결: 시가가 이미 위면 시가, 장중에 넘으면 조건 가격.
+   * v2는 시가가 조건 가격보다 3% 넘게 높게 시작하면 추격하지 않는다. 3거래일 안에 못 넘으면 취소.
+   */
   private async fill(account: AiAccount) {
     const planned = await this.prisma.aiSignal.findMany({
       where: { accountId: account.id, status: 'planned' },
@@ -134,18 +140,42 @@ export class AiDailyJob {
     });
     for (const s of planned) {
       const bars = await this.bars(s.symbol);
-      const next = bars.find((b) => b.date > day(s.date));
-      if (!next) continue; // 아직 다음 날 봉이 없다
-      const { cash } = await this.prisma.aiAccount.findUniqueOrThrow({ where: { id: account.id } });
-      const shares = Math.min(s.shares ?? 0, Math.floor(cash / next.open));
+      const after = bars.filter((b) => b.date > day(s.date)).slice(0, ENTRY.validDays);
+      // 예전(다음 날 시가) 방식으로 계획된 신호는 신호 종가를 조건 가격으로 본다
+      const trigger = s.triggerPrice ?? s.closePrice;
+      const usd = (n: number) => `$${n.toFixed(2)}`;
 
+      let next: Bar | null = null;
+      let price: number | null = null;
       let skip: string | null = null;
-      if (s.stopPrice == null || next.open <= s.stopPrice) skip = `시가 $${next.open.toFixed(2)}가 이미 손절가 아래라 사지 않음`;
-      else if (account.ruleVersion === 'v2' && next.open > s.closePrice * (1 + RULES_V2.maxGapPct)) {
-        skip = `시가 $${next.open.toFixed(2)}가 신호 종가보다 ${((next.open / s.closePrice - 1) * 100).toFixed(1)}% 높아 추격하지 않음`;
-      } else if (account.ruleVersion === 'v1' && s.targetPrice == null) skip = '목표가가 없어 사지 않음';
-      else if (shares <= 0) skip = '현금이 모자라 사지 않음';
-      if (skip) {
+      for (const bar of after) {
+        if (account.ruleVersion === 'v2' && bar.open > trigger * (1 + RULES_V2.maxGapPct)) {
+          skip = `${bar.date} 시가 ${usd(bar.open)}가 조건 가격 ${usd(trigger)}보다 ${((bar.open / trigger - 1) * 100).toFixed(1)}% 높게 시작해 추격하지 않음`;
+          break;
+        }
+        price = fillBuyStop(trigger, bar);
+        if (price != null) {
+          next = bar;
+          break;
+        }
+      }
+      if (!skip && !next) {
+        if (after.length < ENTRY.validDays) continue; // 아직 기다리는 중
+        await this.prisma.aiSignal.update({
+          where: { id: s.id },
+          data: { status: 'expired', note: `${ENTRY.validDays}거래일 안에 ${usd(trigger)}를 넘지 않아 주문 취소` },
+        });
+        continue;
+      }
+
+      const { cash } = await this.prisma.aiAccount.findUniqueOrThrow({ where: { id: account.id } });
+      const shares = price != null ? Math.min(s.shares ?? 0, Math.floor(cash / price)) : 0;
+      if (!skip) {
+        if (s.stopPrice == null || price! <= s.stopPrice) skip = `체결가 ${usd(price!)}가 손절가 아래라 사지 않음`;
+        else if (account.ruleVersion === 'v1' && s.targetPrice == null) skip = '목표가가 없어 사지 않음';
+        else if (shares <= 0) skip = '현금이 모자라 사지 않음';
+      }
+      if (skip || !next || price == null) {
         await this.prisma.aiSignal.update({ where: { id: s.id }, data: { status: 'skipped', note: skip } });
         continue;
       }
@@ -157,17 +187,17 @@ export class AiDailyJob {
           symbol: s.symbol,
           shares,
           entryDate: toDate(next.date),
-          entryPrice: next.open,
+          entryPrice: price,
           stopPrice: s.stopPrice!,
           targetPrice: s.targetPrice,
           status: 'open',
         },
       });
       await this.prisma.$transaction([
-        this.prisma.aiAccount.update({ where: { id: account.id }, data: { cash: { decrement: shares * next.open } } }),
+        this.prisma.aiAccount.update({ where: { id: account.id }, data: { cash: { decrement: shares * price } } }),
         this.prisma.aiSignal.update({
           where: { id: s.id },
-          data: { status: 'filled', positionId: position.id, note: `${next.date} 시가 $${next.open.toFixed(2)}에 ${shares}주 체결` },
+          data: { status: 'filled', positionId: position.id, note: `${next.date} ${price === next.open ? '시가' : '조건 가격'} ${usd(price)}에 ${shares}주 체결` },
         }),
       ]);
     }
@@ -316,8 +346,16 @@ export class AiDailyJob {
     const latestEquity = await this.prisma.aiEquity.findFirst({ where: { accountId: account.id }, orderBy: { date: 'desc' } });
     const equity = latestEquity?.equity ?? fresh.cash;
     let invested = latestEquity?.positionsValue ?? 0;
-    let cash = fresh.cash;
-    let openCount = await this.prisma.aiPosition.count({ where: { accountId: account.id, status: 'open' } });
+    const [openPositions, pendingOrders] = await Promise.all([
+      this.prisma.aiPosition.findMany({ where: { accountId: account.id, status: 'open' }, select: { symbol: true } }),
+      this.prisma.aiSignal.findMany({ where: { accountId: account.id, status: 'planned' } }),
+    ]);
+    // 아직 체결 안 된 조건부 주문도 현금과 자리를 잡아 둔다
+    const reserved = pendingOrders.reduce((sum, o) => sum + (o.shares ?? 0) * (o.triggerPrice ?? o.closePrice), 0);
+    let cash = Math.max(0, fresh.cash - reserved);
+    invested += reserved;
+    let openCount = openPositions.length + pendingOrders.length;
+    const busy = new Set([...openPositions, ...pendingOrders].map((x) => x.symbol));
     const recent = await this.prisma.aiPosition.findMany({
       where: { accountId: account.id, status: 'closed' },
       orderBy: { exitDate: 'desc' },
@@ -337,13 +375,18 @@ export class AiDailyJob {
       let shares: number | null = null;
       let note: string | null = null;
       if (e.verdict === 'buy' && e.stopPrice != null) {
-        // 권장 비중 상한 안에서만 산다
+        // 수량은 조건부 매수가 기준. 권장 비중 상한 안에서만 산다
+        const entry = e.triggerPrice;
         const room = ceiling != null ? Math.max(0, (equity * ceiling) / 100 - invested) : equity;
         const sized = v2
-          ? sizePositionV2({ equity, cash, entry: e.closePrice, stop: e.stopPrice, riskPct })
-          : sizePosition({ equity, cash, entry: e.closePrice, stop: e.stopPrice });
-        shares = Math.min(sized, Math.floor(room / e.closePrice));
-        if (newBuys >= maxNew) {
+          ? sizePositionV2({ equity, cash, entry, stop: e.stopPrice, riskPct })
+          : sizePosition({ equity, cash, entry, stop: e.stopPrice });
+        shares = Math.min(sized, Math.floor(room / entry));
+        if (busy.has(hit.symbol)) {
+          status = 'skipped';
+          note = '이미 보유 중이거나 조건부 주문이 걸려 있음';
+          shares = null;
+        } else if (newBuys >= maxNew) {
           status = 'skipped';
           note = `하루 ${maxNew}종목까지만 삽니다`;
         } else if (v2 && openCount >= RULES_V2.maxPositions) {
@@ -355,8 +398,9 @@ export class AiDailyJob {
         } else {
           newBuys++;
           openCount++;
-          cash -= shares * e.closePrice;
-          invested += shares * e.closePrice;
+          cash -= shares * entry;
+          invested += shares * entry;
+          busy.add(hit.symbol);
           if (v2 && riskPct < RULES_V2.riskPct) note = `최근 ${RULES_V2.lossStreak}번 연속 손절이라 위험을 ${riskPct * 100}%로 줄임`;
         }
       }
@@ -373,10 +417,11 @@ export class AiDailyJob {
           status,
           checks: e.checks as unknown as Prisma.InputJsonValue,
           closePrice: e.closePrice,
+          triggerPrice: e.triggerPrice,
           stopPrice: e.stopPrice,
           targetPrice: e.targetPrice,
           shares,
-          riskAmount: shares && e.stopPrice != null ? shares * (e.closePrice - e.stopPrice) : null,
+          riskAmount: shares && e.stopPrice != null ? shares * (e.triggerPrice - e.stopPrice) : null,
           reasonKo: e.reasonKo,
           exitPlanKo: e.exitPlanKo,
           note,

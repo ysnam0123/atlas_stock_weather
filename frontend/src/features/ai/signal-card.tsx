@@ -3,7 +3,8 @@ import { Check, ChevronDown, X } from "lucide-react";
 import { displayName, usd } from "@/features/my/format";
 
 const BADGE: Record<string, { text: string; className: string }> = {
-  "buy:planned": { text: "매수 예정", className: "bg-primary text-white" },
+  "buy:planned": { text: "조건부 주문", className: "bg-primary text-white" },
+  "buy:expired": { text: "주문 취소", className: "bg-surface text-text-secondary" },
   "buy:filled": { text: "체결", className: "bg-primary-tint text-primary-hover" },
   "buy:skipped": { text: "건너뜀", className: "bg-surface text-text-secondary" },
   "hold:held": { text: "보류 (시장)", className: "bg-surface text-text-secondary" },
@@ -19,6 +20,8 @@ const pctFrom = (a: number, b: number) => `${b >= a ? "+" : "−"}${Math.abs((b 
  */
 export function SignalCard({ s }: { s: AiSignal }) {
   const badge = BADGE[`${s.verdict}:${s.status}`] ?? { text: s.status, className: "bg-surface text-text-secondary" };
+  // 손절·목표 비율은 실제로 살 가격(조건부 매수가) 기준
+  const entry = s.triggerPrice ?? s.closePrice;
   return (
     <details className="group border-b border-border last:border-b-0">
       <summary className="flex cursor-pointer list-none items-start gap-3 rounded-2xl px-2 py-3 hover:bg-surface [&::-webkit-details-marker]:hidden">
@@ -66,34 +69,57 @@ export function SignalCard({ s }: { s: AiSignal }) {
           </ul>
         </div>
 
-        {s.side === "buy" && s.stopPrice != null && s.targetPrice != null && (
+        {s.side === "buy" && s.stopPrice != null && (s.verdict === "buy" || s.verdict === "hold") && (
           <div>
-            <p className="text-[13px] font-medium text-text-secondary">산다면</p>
-            <dl className="mt-1.5 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[14px] tabular-nums sm:grid-cols-4">
+            <p className="text-[13px] font-medium text-text-secondary">
+              {s.verdict === "hold" ? "시장이 맑았다면 이렇게 사요" : "산다면"}
+            </p>
+            <dl className="mt-1.5 grid grid-cols-2 gap-x-6 gap-y-2 text-[14px] tabular-nums sm:grid-cols-4">
               <div>
                 <dt className="text-[12px] text-text-muted">진입</dt>
-                <dd>다음 거래일 시가</dd>
+                <dd>
+                  {s.triggerPrice != null ? (
+                    <>
+                      {usd(s.triggerPrice)} 넘으면
+                      <span className="block text-[12px] text-text-muted">조건부 매수, 3거래일 안</span>
+                    </>
+                  ) : (
+                    "다음 거래일 시가"
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-[12px] text-text-muted">손절가</dt>
                 <dd>
-                  {usd(s.stopPrice)} <span className="text-text-muted">{pctFrom(s.closePrice, s.stopPrice)}</span>
+                  {usd(s.stopPrice)} <span className="text-text-muted">{pctFrom(entry, s.stopPrice)}</span>
                 </dd>
               </div>
               <div>
                 <dt className="text-[12px] text-text-muted">목표가</dt>
                 <dd>
-                  {usd(s.targetPrice)} <span className="text-text-muted">{pctFrom(s.closePrice, s.targetPrice)}</span>
+                  {s.targetPrice != null ? (
+                    <>
+                      {usd(s.targetPrice)} <span className="text-text-muted">{pctFrom(entry, s.targetPrice)}</span>
+                    </>
+                  ) : (
+                    <span className="text-text-secondary">없음, 추세 따라</span>
+                  )}
                 </dd>
               </div>
               <div>
-                <dt className="text-[12px] text-text-muted">수량</dt>
+                <dt className="text-[12px] text-text-muted">AI 수량</dt>
                 <dd>
                   {s.shares ? `${s.shares}주` : "—"}
                   {s.riskAmount != null && <span className="text-text-muted">, 위험 {usd(s.riskAmount)}</span>}
                 </dd>
               </div>
             </dl>
+            {s.mySize && (
+              <p className="mt-2.5 rounded-lg bg-surface px-3 py-2 text-[13px] leading-[1.5] tabular-nums">
+                내 계좌라면 <span className="font-semibold">{s.mySize.shares}주</span> ({usd(s.mySize.amount)}). 손절되면{" "}
+                {usd(s.mySize.risk)}를 잃어요 (총 투자금의 1%).
+              </p>
+            )}
           </div>
         )}
 

@@ -3,6 +3,7 @@ import type { AiAccount } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AI_DAILY, AiDailyJob, BENCHMARK } from './ai-daily.job.js';
 import { EXIT_LABEL, SETUP_LABEL } from './strategy.js';
+import { mySize } from './strategy-v2.js';
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 /** 신호 목록은 최근 이만큼의 장 날짜만 */
@@ -92,7 +93,7 @@ export class AiService {
     // 대결 시작일 = 가장 이른 계좌의 시작 처리일
     const startDate = accounts.map((a) => a.lastProcessedDate ?? a.startedAt).reduce((a, b) => (a < b ? a : b));
     const holdings = await this.prisma.holding.findMany();
-    const views = await Promise.all(accounts.map((a) => this.accountView(a)));
+    const views = await Promise.all(accounts.map((a) => this.accountView(a, capital)));
     const closes = await this.closes(holdings.map((h) => h.symbol));
 
     // 내 성적 (총 투자금이 있어야 비교할 수 있다)
@@ -144,7 +145,7 @@ export class AiService {
   }
 
   /** 계좌 하나의 성적·보유·지난 거래·신호 */
-  private async accountView(account: AiAccount) {
+  private async accountView(account: AiAccount, capital: number | null) {
     const [positions, equity] = await Promise.all([
       this.prisma.aiPosition.findMany({ where: { accountId: account.id }, orderBy: { entryDate: 'desc' } }),
       this.prisma.aiEquity.findMany({ where: { accountId: account.id }, orderBy: { date: 'asc' } }),
@@ -235,6 +236,8 @@ export class AiService {
         status: s.status,
         checks: s.checks,
         closePrice: s.closePrice,
+        triggerPrice: s.triggerPrice,
+        mySize: s.side === 'buy' && (s.verdict === 'buy' || s.verdict === 'hold') ? mySize(capital, s.triggerPrice, s.stopPrice) : null,
         stopPrice: s.stopPrice,
         targetPrice: s.targetPrice,
         shares: s.shares,

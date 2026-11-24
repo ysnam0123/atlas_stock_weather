@@ -217,10 +217,11 @@ model AiSignal {
   symbol      String
   side        String // buy | sell
   setups      String[] // breakout_20d, bull_flag, reclaim_ma20, oversold …, sell은 stop | target | ma50 | time
-  verdict     String // buy(다음 날 시가 매수) | hold(시장 때문에 보류) | watch(셋업 약함) | sell
-  status      String // planned | filled | held | watch | skipped | done
+  verdict     String // buy(조건부 매수) | hold(시장 때문에 보류) | watch(셋업 약함) | sell
+  status      String // planned | filled | expired | held | watch | skipped | done
   checks      Json // [{ key, label, pass, detail }]
   closePrice  Float
+  triggerPrice Float? // 조건부 매수가: 신호 날 고가 + 1센트. 3거래일 안에 넘으면 체결
   stopPrice   Float?
   targetPrice Float?
   shares      Int?
