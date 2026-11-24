@@ -440,3 +440,23 @@ model PremarketSnapshot {
   @@unique([symbol, sessionDate])
   @@map("premarket_snapshots")
 }
+
+// ── Phase 6: 깊게 분석 (버튼을 누를 때만, Claude) ──
+
+/// 종목 리포트 한 번 = 작업 하나. running → success | failed. 입력(스크립트 계산값)과 Claude 출력을 통째로 남긴다
+model StockReport {
+  id           String    @id @default(uuid())
+  symbol       String
+  status       String // running | success | failed
+  /// Claude에 넘긴 계산값 (지지·저항, 이동평균, 분기 실적 등)
+  input        Json
+  output       Json?
+  error        String?
+  inputTokens  Int?
+  outputTokens Int?
+  createdAt    DateTime  @default(now()) @db.Timestamptz
+  finishedAt   DateTime? @db.Timestamptz
+
+  @@index([symbol, createdAt])
+  @@map("stock_reports")
+}

@@ -13,6 +13,6 @@ import { SymbolsWeeklyJob } from './symbols-weekly.job.js';
 
 @Module({
   providers: [SkillRunnerService, MarketDailyJob, BackfillUptrendJob, SymbolsWeeklyJob, PricesService, AiDailyJob, EarningsCalendarJob, ClaudeService, CommentaryJob, StockIntelJob, PremarketJob],
-  exports: [PremarketJob, StockIntelJob, CommentaryJob, EarningsCalendarJob, MarketDailyJob, BackfillUptrendJob, SymbolsWeeklyJob, PricesService, AiDailyJob],
+  exports: [ClaudeService, SkillRunnerService, PremarketJob, StockIntelJob, CommentaryJob, EarningsCalendarJob, MarketDailyJob, BackfillUptrendJob, SymbolsWeeklyJob, PricesService, AiDailyJob],
 })
 export class JobsModule {}

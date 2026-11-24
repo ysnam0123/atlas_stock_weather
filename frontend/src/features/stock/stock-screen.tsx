@@ -13,6 +13,7 @@ import { useAddWatch, useMy } from "@/features/my/use-my";
 import { api } from "@/shared/api/client";
 import { tradeDay } from "@/shared/lib/time";
 import { CARD } from "@/shared/ui/card";
+import { DeepAnalysis } from "./deep-analysis";
 import { type PlanLine, PlanChart } from "./plan-chart";
 
 export const stockKey = (symbol: string) => ["stock", symbol] as const;
@@ -141,6 +142,10 @@ export function StockScreen({ symbol }: { symbol: string }) {
             <AiHistory d={data} />
           </div>
         </div>
+      </div>
+
+      <div className={`${CARD} lg:p-8`}>
+        <DeepAnalysis symbol={data.symbol} />
       </div>
 
       <StockInfoSheet target={infoOpen ? data : null} onClose={() => setInfoOpen(false)} />

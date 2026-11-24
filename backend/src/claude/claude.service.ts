@@ -14,6 +14,14 @@ export interface ClaudeResult<T> {
 
 const TIMEOUT_MS = 180_000;
 
+export interface ClaudeInput {
+  system: string;
+  prompt: string;
+  schema: object;
+  tools?: 'WebSearch'[];
+  timeoutMs?: number;
+}
+
 /**
  * 예측·지시 표현 (절대 규칙 7). Claude 출력에 섞이면 다시 쓰게 하고, 또 섞이면 버린다.
  * 사라·팔라는 지시도 막는다. 선택은 사용자 몫이다.
@@ -53,7 +61,7 @@ export function findForbidden(value: unknown): string[] {
 /**
  * Claude Code 헤드리스(`claude -p`) 호출 (CLAUDE_MODE=code, 구독 계정).
  * - 출력은 --json-schema로 강제한다 (절대 규칙 3)
- * - 도구는 모두 끈다. 필요한 값은 프롬프트에 다 넣어 준다 (허용 목록 Read·Glob·WebSearch보다 좁게)
+ * - 도구는 기본으로 모두 끈다. 필요한 값은 프롬프트에 다 넣어 준다. 깊게 분석만 WebSearch를 켠다 (허용 목록 Read·Glob·WebSearch 안)
  * - 레포 밖 빈 폴더에서 돌려 CLAUDE.md·프로젝트 설정을 읽지 않는다
  * - 시스템 프롬프트를 우리 것으로 바꿔 기본 프롬프트 토큰을 아낀다
  */
@@ -65,7 +73,11 @@ export class ClaudeService {
     return process.env.CLAUDE_MODEL || 'sonnet';
   }
 
-  async structured<T>(input: { system: string; prompt: string; schema: object }): Promise<ClaudeResult<T>> {
+  /**
+   * tools: 켤 도구. 허용 목록(절대 규칙 3) 중 WebSearch만 쓴다. 기본은 전부 끔.
+   * timeoutMs: 웹 검색을 하면 오래 걸린다
+   */
+  async structured<T>(input: ClaudeInput): Promise<ClaudeResult<T>> {
     if ((process.env.CLAUDE_MODE ?? 'code') !== 'code') {
       throw new Error(`CLAUDE_MODE=${process.env.CLAUDE_MODE}는 아직 지원하지 않아요 (code만)`);
     }
@@ -79,7 +91,8 @@ export class ClaudeService {
       '--json-schema',
       JSON.stringify(input.schema),
       '--tools',
-      '',
+      (input.tools ?? []).join(','),
+      ...(input.tools?.length ? ['--allowedTools', input.tools.join(',')] : []),
       '--system-prompt',
       input.system,
       '--no-session-persistence',
@@ -91,10 +104,11 @@ export class ClaudeService {
       const child = spawn('claude', args, { cwd, env: process.env });
       let out = '';
       let err = '';
+      const timeoutMs = input.timeoutMs ?? TIMEOUT_MS;
       const timer = setTimeout(() => {
         child.kill('SIGTERM');
-        reject(new Error(`claude 시간 초과 (${TIMEOUT_MS / 1000}초)`));
-      }, TIMEOUT_MS);
+        reject(new Error(`claude 시간 초과 (${timeoutMs / 1000}초)`));
+      }, timeoutMs);
       child.stdout.on('data', (d) => (out += d));
       child.stderr.on('data', (d) => (err += d));
       child.on('error', (e) => {
@@ -130,7 +144,7 @@ export class ClaudeService {
   }
 
   /** 금지 표현이 나오면 한 번 다시 쓰게 한다. 그래도 나오면 에러 */
-  async structuredChecked<T>(input: { system: string; prompt: string; schema: object }): Promise<ClaudeResult<T>> {
+  async structuredChecked<T>(input: ClaudeInput): Promise<ClaudeResult<T>> {
     const first = await this.structured<T>(input);
     const bad = findForbidden(first.data);
     if (!bad.length) return first;

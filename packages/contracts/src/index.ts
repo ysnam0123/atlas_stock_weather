@@ -176,6 +176,34 @@ export interface StockDetail {
   trades: { id: string; date: string; side: 'buy' | 'sell'; shares: number; price: number; realizedPnl: number | null }[];
 }
 
+/** 깊게 분석 (버튼을 누를 때만 Claude). 숫자는 스크립트 계산값, Claude는 설명만 */
+export interface StockReport {
+  id: string;
+  symbol: string;
+  status: 'running' | 'success' | 'failed';
+  createdAt: string;
+  finishedAt: string | null;
+  /** 분석에 쓴 장 날짜 */
+  asOf: string | null;
+  /** 웹 검색 포함 여부 */
+  web: boolean;
+  /** 스크립트가 계산한 지지·저항 (종가 위가 저항) */
+  levels: { price: number; kind: 'support' | 'resistance'; touches: number; lastDate: string }[];
+  output: {
+    headline: string;
+    business: string[];
+    growth: string[];
+    valuation: string[];
+    chart: string[];
+    risks: string[];
+    watch: string[];
+    sources: { title: string; url: string }[];
+  } | null;
+  error: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
 // ── Phase 7: 섹터 지도 ──────────────────────────────
 
 /** leading 높고 오르는 중, weakening 높지만 내리는 중, improving 낮지만 오르는 중, lagging 낮고 내리는 중 */
