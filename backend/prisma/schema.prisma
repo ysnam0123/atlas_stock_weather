@@ -389,6 +389,21 @@ model CongressDoc {
   @@map("congress_docs")
 }
 
+/// 현직 하원 의원 (unitedstates/congress-legislators 공개 데이터). 신고 문서의 지역구(NJ07)로 잇는다
+model CongressMember {
+  bioguide   String   @id
+  name       String
+  party      String // Republican | Democrat | Independent
+  state      String
+  district   Int // 주 전체 단일 선거구는 0
+  /// 상임위원회 thomas id (HSAS 등, 소위원회 제외)
+  committees String[]
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  @@index([state, district])
+  @@map("congress_members")
+}
+
 model CongressTrade {
   id         String      @id @default(uuid())
   docId      String

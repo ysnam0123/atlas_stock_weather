@@ -37,7 +37,7 @@ export function MarketPosture({
   my: MyResponse | undefined;
   now: Date;
   onSetCapital: () => void;
-  /** 해설 옆에 둘 내 종목 소식 */
+  /** 해설 앞(데스크톱은 왼쪽)에 둘 내 종목 소식 */
   news?: ReactNode;
 }) {
   const cond = weather.condition ? CONDITION[weather.condition] : null;
@@ -97,8 +97,9 @@ export function MarketPosture({
         </div>
       </div>
 
-      {/* Claude 해설(시장) 옆·아래에 내 종목 소식. 해설이 없으면(실패·아직) 소식만 */}
+      {/* 내 종목 소식 옆·아래에 Claude 해설(시장). 해설이 없으면(실패·아직) 소식만 */}
       <div className="mt-5 grid gap-x-8 gap-y-5 xl:grid-cols-2">
+        {news}
         {weather.commentary && (
           <div className="self-start rounded-2xl bg-surface px-4 py-3.5">
             <p className="text-[12px] text-text-muted">Claude 해설</p>
@@ -112,7 +113,6 @@ export function MarketPosture({
             </ul>
           </div>
         )}
-        {news}
       </div>
     </section>
   );

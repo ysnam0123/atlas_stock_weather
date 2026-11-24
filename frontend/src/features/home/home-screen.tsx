@@ -67,6 +67,10 @@ export function HomeScreen() {
             <p className="text-[17px] text-text-muted">시장 날씨 데이터 없음</p>
           )}
         </div>
+        {/* 데스크톱: 섹터 순위 왼쪽, 오늘 할 일 오른쪽. 모바일은 order로 오늘 할 일이 먼저 */}
+        <div className={`${MOBILE_CARD} max-lg:order-6`}>
+          <SectorRanking sectors={data.sectors} />
+        </div>
         <div className={`${MOBILE_CARD} max-lg:order-2`}>
           <ActionQueue
             weather={weather}
@@ -80,9 +84,6 @@ export function HomeScreen() {
               scrollToId("clear-title");
             }}
           />
-        </div>
-        <div className={`${MOBILE_CARD} max-lg:order-6`}>
-          <SectorRanking sectors={data.sectors} />
         </div>
         <div className={`${MOBILE_CARD} max-lg:order-3 lg:col-span-full`}>
           <Positions my={my.data} failed={my.isError} />

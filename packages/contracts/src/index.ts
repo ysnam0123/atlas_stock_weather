@@ -343,12 +343,23 @@ export interface HomeIntelNews {
   publishedAt: string;
 }
 
+/** 현직 하원 의원 정보 (공개 데이터). 전직이거나 아직 못 받았으면 null */
+export interface CongressMemberInfo {
+  /** 공화당, 민주당, 무소속 */
+  party: string;
+  /** "오하이오 6구" */
+  seat: string;
+  /** 상임위원회 한국어 이름 */
+  committees: string[];
+}
+
 export interface HomeIntelCongress {
   symbol: string;
   nameEn: string;
   nameKo: string | null;
   tracked: 'holding' | 'watch';
   member: string;
+  memberInfo: CongressMemberInfo | null;
   /** P 매수, S 매도, S (partial) 일부 매도, E 교환 */
   type: string;
   amount: string;
@@ -382,6 +393,7 @@ export interface StockIntel {
   }[];
   congress: {
     member: string;
+    memberInfo: CongressMemberInfo | null;
     type: string;
     typeName: string;
     amount: string;

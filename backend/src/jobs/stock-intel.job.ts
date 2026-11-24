@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client.js';
 import { adaptFacts, adaptNews, adaptPtr } from '../adapters/stock-intel.adapter.js';
 import { ClaudeService } from '../claude/claude.service.js';
+import { fetchHouseMembers } from './congress-members.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SkillRunnerService } from '../skills/skill-runner.service.js';
 
@@ -18,6 +19,8 @@ const CONGRESS_MAX_DOCS = 40;
 /** Claude가 한 번에 번역하는 제목 수 */
 const TRANSLATE_LIMIT = 40;
 const PTR_SCRIPT = 'vendor/day-trader-skill/trader-pelosi/ptr.py';
+/** 의원 정보(정당·위원회)는 자주 바뀌지 않는다 */
+const MEMBERS_REFRESH_DAYS = 7;
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -114,6 +117,7 @@ export class StockIntelJob {
 
     // 의원 거래는 내 종목과 상관없이 모아 둔다 (나중에 관심에 넣은 종목도 바로 보이게)
     await step('의원 거래', () => this.congress(run.id));
+    await step('의원 정보', () => this.members());
     await step('번역', () => this.translate());
 
     const status = failed === 0 ? 'success' : failed >= 3 ? 'failed' : 'partial';
@@ -162,6 +166,16 @@ export class StockIntelJob {
       });
     }
     return `의원 거래 문서 ${todo.length}개 읽음, 거래 ${trades}건 (남은 문서 ${Math.max(0, docs.length - done.size - todo.length)}개)`;
+  }
+
+  /** 현직 하원 의원 정당·지역구·위원회. 일주일에 한 번만 새로 받는다 */
+  private async members() {
+    const latest = await this.prisma.congressMember.findFirst({ orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } });
+    if (latest && Date.now() - latest.updatedAt.getTime() < MEMBERS_REFRESH_DAYS * DAY_MS) return '의원 정보는 최신';
+    const rows = await fetchHouseMembers();
+    if (rows.length < 400) throw new Error(`하원 의원이 ${rows.length}명뿐이에요 (원본 확인 필요)`);
+    await this.prisma.$transaction([this.prisma.congressMember.deleteMany(), this.prisma.congressMember.createMany({ data: rows })]);
+    return `의원 정보 ${rows.length}명`;
   }
 
   /** 최근 7일 새 제목을 한국어로 옮기고 중요도를 매긴다 */

@@ -178,7 +178,17 @@ function Congress({ data }: { data: StockIntel }) {
               {TRADE_KO[c.type] ?? c.typeName}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[14px]">{c.member}</span>
+              <span className="flex items-baseline gap-2">
+                <span className="truncate text-[14px]">{c.member}</span>
+                {c.memberInfo && (
+                  <span className="shrink-0 text-[12px] text-text-secondary">
+                    {c.memberInfo.party}, {c.memberInfo.seat}
+                  </span>
+                )}
+              </span>
+              {c.memberInfo && c.memberInfo.committees.length > 0 && (
+                <span className="block text-[12px] text-text-secondary">위원회: {c.memberInfo.committees.join(", ")}</span>
+              )}
               <span className="block text-[12px] text-text-muted tabular-nums">
                 거래 {c.tradeDate ?? "—"}, 신고 {c.filed}
                 {c.owner && c.owner !== "self" && `, ${c.owner === "spouse" ? "배우자" : c.owner}`}
@@ -190,6 +200,7 @@ function Congress({ data }: { data: StockIntel }) {
       </ul>
       <p className="mt-3 text-[12px] leading-[1.5] text-text-muted">
         미국 하원 공개 신고(STOCK Act)예요. 거래 뒤 최대 45일 늦게 신고되고, 금액은 범위로만 나와요. 내부 정보가 아니에요.
+        소속 위원회가 그 회사 업종을 다루면(예: 군사위원회와 방산주) 눈여겨볼 만해요.
       </p>
     </>
   );

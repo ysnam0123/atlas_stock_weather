@@ -5,6 +5,7 @@ import { stopOptions } from '../holdings/stop-options.js';
 import { BENCHMARK } from '../ai/ai-daily.job.js';
 import type { Bar, Condition } from '../ai/strategy.js';
 import { evaluateBuyV2 } from '../ai/strategy-v2.js';
+import { lookupMembers } from '../jobs/congress-members.js';
 
 interface ScanHit {
   symbol: string;
@@ -448,11 +449,12 @@ export class MyService {
       this.prisma.earningsFact.findMany({ where: { symbol }, orderBy: { periodEnd: 'desc' }, take: 6 }),
       this.prisma.congressTrade.findMany({
         where: { ticker: symbol, doc: { filed: { gte: since(120) } } },
-        include: { doc: { select: { member: true, filed: true } } },
+        include: { doc: { select: { member: true, filed: true, district: true } } },
         orderBy: { doc: { filed: 'desc' } },
         take: 30,
       }),
     ]);
+    const members = await lookupMembers(this.prisma, trades.map((t) => t.doc.district));
     return {
       symbol,
       news: news.map((n) => ({
@@ -478,6 +480,7 @@ export class MyService {
       })),
       congress: trades.map((t) => ({
         member: t.doc.member.replace(/^Hon\.\s*/, ''),
+        memberInfo: (t.doc.district && members.get(t.doc.district)) ?? null,
         type: t.type,
         typeName: t.typeName,
         amount: t.amount,

@@ -18,7 +18,7 @@ Atlas는 두 저장소의 스킬만 쓴다. TradingView MCP(tradesdontlie, Lewis
 | 1. 시장 날씨 | 사도 되는 시장인가, 어느 섹터가 강한가 | market-breadth-analyzer ③, uptrend-analyzer ③, exposure-coach ③, sector-analyst ③ | 공개 CSV, 키 불필요 |
 | 1. 시장 날씨 (추가) | 이번 주 일정, 시장 뉴스 | economic-calendar-fetcher ③, market-news-analyst ③ (Claude), theme-detector ③ | FMP, 웹검색, FINVIZ 공개 |
 | 2. 종목 찾기 | 조건 맞는 종목은 | vcp-screener ③, canslim-screener ③, value-dividend-screener ③ | FMP |
-| 3. 종목 이해 | 실적·뉴스·차트·의원 공시는 | trader-news ④, trader-analyst ④, trader-pelosi ④, earnings-calendar ③, technical-analyst ③ (스크립트 모드), us-stock-analysis ③ (Claude) | Yahoo, SEC, FMP |
+| 3. 종목 이해 | 실적·뉴스·차트·의원 공시는 | trader-news ④, trader-analyst ④, trader-pelosi ④, earnings-calendar ③, technical-analyst ③ (스크립트 모드), us-stock-analysis ③ (Claude) | Yahoo, SEC, FMP, congress-legislators(의원 정보) |
 | 4. 계획 | 얼마에 사고 어디서 손절하나 | breakout-trade-planner ③, position-sizer ③, pre-trade-discipline-gate ③ | 계산 전용 |
 | 5. 기록·복기 (2차) | 내 판단이 맞았나 | trader-memory-core ③, signal-postmortem ③, weekly-performance-digest ③ | 계산 전용 |
 

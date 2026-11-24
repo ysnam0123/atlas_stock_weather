@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Market } from '../generated/prisma/client.js';
+import { lookupMembers } from '../jobs/congress-members.js';
 import { MARKET_DAILY } from '../jobs/market-daily.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MARKET_DAILY_SLOT } from '../scheduler/scheduler.service.js';
@@ -57,12 +58,13 @@ export class HomeService {
       }),
       this.prisma.congressTrade.findMany({
         where: { ticker: { in: symbols }, doc: { filed: { gte: since(30) } } },
-        include: { doc: { select: { member: true, filed: true } } },
+        include: { doc: { select: { member: true, filed: true, district: true } } },
         orderBy: { doc: { filed: 'desc' } },
         take: 10,
       }),
       this.prisma.symbol.findMany({ where: { symbol: { in: symbols } }, select: { symbol: true, nameEn: true, nameKo: true } }),
     ]);
+    const members = await lookupMembers(this.prisma, trades.map((t) => t.doc.district));
     const nameOf = new Map(names.map((n) => [n.symbol, n]));
     const name = (s: string) => ({ nameEn: nameOf.get(s)?.nameEn ?? s, nameKo: nameOf.get(s)?.nameKo ?? null });
     return {
@@ -81,6 +83,7 @@ export class HomeService {
         ...name(t.ticker!),
         tracked: kind.get(t.ticker!)!,
         member: t.doc.member.replace(/^Hon\.\s*/, ''),
+        memberInfo: (t.doc.district && members.get(t.doc.district)) ?? null,
         type: t.type,
         amount: t.amount,
         tradeDate: t.tradeDate ? day(t.tradeDate) : null,
