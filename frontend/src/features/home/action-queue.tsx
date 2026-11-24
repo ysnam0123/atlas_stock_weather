@@ -1,12 +1,9 @@
-import type { AiSignal, HomeEarnings, HomeResponse, HomeWeather, MyResponse } from "@atlas/contracts";
+import type { AiSignal, HomeEarnings, HomeWeather, MyResponse } from "@atlas/contracts";
 import {
   CalendarDays,
   ChevronRight,
   CloudSun,
-  Eye,
   Flag,
-  Landmark,
-  Newspaper,
   PieChart,
   ShieldAlert,
   Star,
@@ -33,7 +30,8 @@ interface Action {
 }
 
 /**
- * 오늘 할 일 (급한 순): 손절가 → 비중 초과 → 목표가 → 손절가 없음 → 설정 → 시장 → 관심 → 일정.
+ * 오늘 할 일 (급한 순): 손절가 → AI 매도 신호 → 실적 발표 → 비중 초과 → 목표가 → 손절가 없음 → 설정 → 시장 → AI 매수.
+ * 행동할 것만 둔다. 뉴스·의원 거래는 "내 종목 소식"(intel-feed), 관심 종목 상태는 관심 카드에서 본다.
  * 날씨 판정과 내 종목 상태에서 규칙대로 만든다 (Claude를 쓰지 않는다). 선택과 주문은 사용자가 한다.
  */
 export function ActionQueue({
@@ -41,9 +39,7 @@ export function ActionQueue({
   my,
   aiSignals,
   earnings,
-  intel,
   now,
-  onInfo,
   onOpenConditions,
   onSetCapital,
 }: {
@@ -53,9 +49,7 @@ export function ActionQueue({
   /** 가장 최근 장의 AI 신호. 내 종목 매도 신호와 AI 매수 예정만 쓴다 */
   aiSignals: AiSignal[];
   earnings: HomeEarnings[];
-  intel: HomeResponse["intel"];
   now: Date;
-  onInfo: (target: { symbol: string; nameKo: string | null; nameEn: string }) => void;
   onOpenConditions: () => void;
   onSetCapital: () => void;
 }) {
@@ -105,34 +99,6 @@ export function ActionQueue({
       text: `${displayName(e)} 실적 발표 ${d === 0 ? "오늘" : `D-${d}`}`,
       sub: "발표 날은 크게 움직일 수 있어요. 손절가와 비중을 미리 확인해 두세요",
       href: "/my",
-    });
-  }
-
-  // 내 종목의 새 SEC 공시·중요 뉴스 (3일). 보유 종목부터
-  const news = [...intel.news].sort((a, b) => Number(b.tracked === "holding") - Number(a.tracked === "holding"));
-  for (const n of news.slice(0, 3)) {
-    actions.push({
-      key: `news-${n.id}`,
-      icon: Newspaper,
-      text: `${displayName(n)} ${n.kind === "sec" ? "새 SEC 공시" : "주요 뉴스"} (${n.tracked === "holding" ? "보유" : "관심"})`,
-      sub: n.title,
-      onClick: () => onInfo(n),
-    });
-  }
-
-  // 의원 거래 신고 (30일). 종목별로 묶는다
-  const bySymbol = new Map<string, typeof intel.congress>();
-  for (const c of intel.congress) bySymbol.set(c.symbol, [...(bySymbol.get(c.symbol) ?? []), c]);
-  for (const [, list] of bySymbol) {
-    const buys = list.filter((c) => c.type === "P").length;
-    const latest = list[0];
-    actions.push({
-      key: `congress-${latest.symbol}`,
-      icon: Landmark,
-      muted: true,
-      text: `${displayName(latest)}에 의원 거래 신고 ${list.length}건 (매수 ${buys}, 매도 ${list.length - buys})`,
-      sub: `최근: ${latest.member}, ${latest.amount}. 거래 뒤 늦게 신고되는 공개 자료예요`,
-      onClick: () => onInfo(latest),
     });
   }
 
@@ -201,15 +167,6 @@ export function ActionQueue({
         onClick: onOpenConditions,
       });
     }
-    if (my?.watchlist.length) {
-      actions.push({
-        key: "watch",
-        icon: Eye,
-        muted: true,
-        text: `관심 ${my.watchlist.length}개는 지켜보기만`,
-        sub: "맑아지면 진입 조건을 확인해 드려요",
-      });
-    }
   }
 
   const buys = aiSignals.filter((x) => x.verdict === "buy" && x.status === "planned");
@@ -225,7 +182,14 @@ export function ActionQueue({
 
   return (
     <section aria-labelledby="actions-title">
-      <SectionTitle id="actions-title">오늘 할 일</SectionTitle>
+      <SectionTitle id="actions-title" aside={actions.length ? `${actions.length}개` : undefined}>
+        오늘 할 일
+      </SectionTitle>
+      {actions.length === 0 && (
+        <p className="mt-2 text-[15px] leading-[1.5] text-text-secondary">
+          오늘은 손볼 게 없어요. 손절가와 비중이 모두 계획 안에 있어요.
+        </p>
+      )}
       <ul className="mt-2 -mx-2">
         {actions.map((a, i) => {
           const last = i === actions.length - 1;

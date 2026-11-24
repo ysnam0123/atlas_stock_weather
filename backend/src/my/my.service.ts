@@ -2,6 +2,22 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { PricesService } from '../jobs/prices.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { stopOptions } from '../holdings/stop-options.js';
+import { BENCHMARK } from '../ai/ai-daily.job.js';
+import type { Bar, Condition } from '../ai/strategy.js';
+import { evaluateBuyV2 } from '../ai/strategy-v2.js';
+
+interface ScanHit {
+  symbol: string;
+  setups: string[];
+  rsi?: number | null;
+  close_date: string;
+}
+
+interface ScanContext {
+  hits: Map<string, ScanHit>;
+  spy: Bar[];
+  condition: Condition | null;
+}
 
 const SEARCH_LIMIT = 20;
 /** 손절가 계산·등락에 쓰는 일봉 기간 */
@@ -134,6 +150,15 @@ export class MyService {
       this.capital(),
     ]);
     const closes = await this.lastCloses([...holdings, ...watch].map((x) => x.symbol));
+    const weather = await this.prisma.marketSnapshot.findFirst({
+      where: { market: 'us', condition: { not: null } },
+      orderBy: { tradeDate: 'desc' },
+    });
+    const scan: ScanContext = {
+      hits: watch.length ? await this.latestScan() : new Map(),
+      spy: watch.length ? await this.bars(BENCHMARK) : [],
+      condition: (weather?.condition ?? null) as Condition | null,
+    };
 
     const price = (symbol: string) => {
       const c = closes.get(symbol);
@@ -188,14 +213,60 @@ export class MyService {
         exposurePct: capital ? (marketValue / capital) * 100 : null,
       },
       holdings: rows,
-      watchlist: watch.map((w) => ({
-        symbol: w.symbol,
-        ...names(w.info),
-        note: w.note,
-        addedAt: w.addedAt.toISOString(),
-        ...price(w.symbol),
-      })),
+      watchlist: await Promise.all(
+        watch.map(async (w) => ({
+          symbol: w.symbol,
+          ...names(w.info),
+          note: w.note,
+          addedAt: w.addedAt.toISOString(),
+          ...price(w.symbol),
+          readiness: await this.readiness(w.symbol, scan),
+        })),
+      ),
     };
+  }
+
+  /** 가장 최근 trader-scanner 원본 출력의 종목별 셋업·RSI (ai_daily가 저장한 것) */
+  private async latestScan(): Promise<Map<string, ScanHit>> {
+    const out = await this.prisma.skillOutput.findFirst({
+      where: { skillId: 'trader-scanner', status: 'success' },
+      orderBy: { createdAt: 'desc' },
+      select: { rawJson: true },
+    });
+    const hits = ((out?.rawJson as { hits?: ScanHit[] } | null)?.hits ?? []).filter((h) => h.symbol);
+    return new Map(hits.map((h) => [h.symbol, h]));
+  }
+
+  private async bars(symbol: string): Promise<Bar[]> {
+    const rows = await this.prisma.priceBar.findMany({ where: { symbol }, orderBy: { date: 'asc' } });
+    return rows.map((r) => ({ date: day(r.date), open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume }));
+  }
+
+  /**
+   * 관심 종목을 AI v2 매수 규칙으로 본다 (계산은 전부 스크립트, 절대 규칙 2).
+   * 셋업은 그날 스캔 결과에서 가져오고, 스캔에 없으면 셋업 없음으로 본다.
+   */
+  private async readiness(symbol: string, scan: ScanContext) {
+    const bars = await this.bars(symbol);
+    if (bars.length < 30) return null;
+    const last = bars.at(-1)!;
+    const hit = scan.hits.get(symbol);
+    const sameDay = hit?.close_date === last.date;
+    const earnings = await this.prisma.calendarEvent.findFirst({
+      where: { type: 'earnings', symbol, date: { gte: new Date(`${last.date}T00:00:00Z`) } },
+      orderBy: { date: 'asc' },
+    });
+    const e = evaluateBuyV2({
+      setups: sameDay ? hit.setups : [],
+      rsi: sameDay ? (hit.rsi ?? null) : null,
+      bars,
+      benchmark: scan.spy,
+      condition: scan.condition,
+      daysToEarnings: earnings ? Math.round((earnings.date.getTime() - new Date(`${last.date}T00:00:00Z`).getTime()) / DAY_MS) : null,
+    });
+    // 스캔에 없던 종목은 "셋업 없음"으로 보여준다
+    const checks = e.checks.map((c) => (c.key === 'setup' && !c.detail ? { ...c, detail: '오늘 찾은 셋업 없음' } : c));
+    return { date: last.date, verdict: e.verdict, checks, reasonKo: e.reasonKo, stopPrice: e.stopPrice };
   }
 
   private async requireSymbol(symbol: string) {

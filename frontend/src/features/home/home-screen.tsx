@@ -6,9 +6,10 @@ import { type InfoTarget, StockInfoSheet } from "@/features/my/stock-info-sheet"
 import { useMy } from "@/features/my/use-my";
 import { CARD, MOBILE_CARD } from "@/shared/ui/card";
 import { ActionQueue } from "./action-queue";
-import { AiSignalCard } from "./ai-signal-card";
+import { AiSignalCard, primaryAccount } from "./ai-signal-card";
 import { BriefingFooter } from "./briefing-footer";
 import { CapitalSheet } from "./capital-sheet";
+import { IntelFeed } from "./intel-feed";
 import { MarketDetail } from "./market-detail";
 import { MarketPosture } from "./market-posture";
 import { Positions } from "./positions";
@@ -55,7 +56,13 @@ export function HomeScreen() {
       <div className="max-lg:contents lg:grid lg:items-start lg:gap-x-12 lg:gap-y-10 lg:rounded-[24px] lg:border lg:border-border lg:bg-surface-raised lg:p-8 lg:shadow-card xl:grid-cols-2">
         <div className={`${MOBILE_CARD} max-lg:order-1 lg:col-span-full lg:border-b lg:border-border lg:pb-8`}>
           {weather ? (
-            <MarketPosture weather={weather} my={my.data} now={now} onSetCapital={openCapital} />
+            <MarketPosture
+              weather={weather}
+              my={my.data}
+              now={now}
+              onSetCapital={openCapital}
+              news={<IntelFeed intel={data.intel} now={now} onInfo={setInfo} />}
+            />
           ) : (
             <p className="text-[17px] text-text-muted">시장 날씨 데이터 없음</p>
           )}
@@ -64,11 +71,9 @@ export function HomeScreen() {
           <ActionQueue
             weather={weather}
             my={my.data}
-            aiSignals={(ai.data?.signals ?? []).filter((s) => s.date === ai.data?.signals[0]?.date)}
+            aiSignals={(primaryAccount(ai.data)?.signals ?? []).filter((s) => s.date === primaryAccount(ai.data)?.signals[0]?.date)}
             earnings={data.earnings}
-            intel={data.intel}
             now={now}
-            onInfo={setInfo}
             onSetCapital={openCapital}
             onOpenConditions={() => {
               setDetailOpen(true);
@@ -102,7 +107,7 @@ export function HomeScreen() {
           <AiSignalCard ai={ai.data} failed={ai.isError} />
         </div>
         <div className={`${CARD} max-lg:order-4 lg:flex-1`}>
-          <WatchCard my={my.data} failed={my.isError} condition={weather?.condition ?? null} onInfo={setInfo} />
+          <WatchCard my={my.data} failed={my.isError} onInfo={setInfo} />
         </div>
         <div className={`${CARD} max-lg:order-5`}>
           <ScheduleCard earnings={data.earnings} now={now} />
