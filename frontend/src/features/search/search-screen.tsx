@@ -2,6 +2,7 @@
 
 import type { SymbolHit } from "@atlas/contracts";
 import { Search } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { HoldingSheet, type SheetTarget } from "@/features/my/holding-sheet";
 import { useAddWatch, useSymbolSearch } from "@/features/my/use-my";
@@ -74,19 +75,21 @@ function ResultRow({
 }) {
   return (
     <li className="flex items-center gap-3 border-b border-border px-2 py-3 last:border-b-0">
-      <span className="w-16 shrink-0 text-[15px] font-semibold">{hit.symbol}</span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="truncate text-[15px]">{hit.nameKo ?? hit.nameEn}</span>
-          {hit.type === "etf" && (
-            <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-text-secondary">ETF</span>
-          )}
+      <Link href={`/stocks/${encodeURIComponent(hit.symbol)}`} className="pressable flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:text-primary">
+        <span className="w-16 shrink-0 text-[15px] font-semibold">{hit.symbol}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-[15px]">{hit.nameKo ?? hit.nameEn}</span>
+            {hit.type === "etf" && (
+              <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-text-secondary">ETF</span>
+            )}
+          </span>
+          <span className="block truncate text-[13px] text-text-muted">
+            {hit.nameKo ? `${hit.nameEn}, ` : ""}
+            {hit.exchange}
+          </span>
         </span>
-        <span className="block truncate text-[13px] text-text-muted">
-          {hit.nameKo ? `${hit.nameEn}, ` : ""}
-          {hit.exchange}
-        </span>
-      </span>
+      </Link>
       {hit.tracked ? (
         <span className="shrink-0 rounded-full bg-surface px-3 py-1.5 text-[13px] text-text-secondary">
           {hit.tracked === "holding" ? "보유 중" : "관심 중"}

@@ -11,6 +11,7 @@
   "dependencies": {
     "@atlas/contracts": "workspace:*",
     "@tanstack/react-query": "^5.108.2",
+    "lightweight-charts": "5.2.1",
     "lucide-react": "^1.77.0",
     "next": "16.4.6",
     "react": "19.3.0",

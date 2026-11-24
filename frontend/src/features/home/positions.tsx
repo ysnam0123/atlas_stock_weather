@@ -3,9 +3,8 @@
 import type { MyHolding, MyResponse } from "@atlas/contracts";
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { changeText, displayName, STOP_TONE_CLASS, stopStatus, usd } from "@/features/my/format";
-import { HoldingSheet, type SheetTarget } from "@/features/my/holding-sheet";
 import { SectionTitle } from "./section";
 
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${usd(Math.abs(n))}`;
@@ -23,10 +22,11 @@ function Pnl({ h }: { h: MyHolding }) {
 
 /**
  * 보유 종목 표. 트레이더가 매일 보는 숫자: 수익, 손절가까지 거리, 열린 위험(다 손절되면 잃는 돈), 보유 일수.
- * 넓은 화면은 표, 좁은 화면은 줄 목록. 행을 누르면 편집 시트.
+ * 넓은 화면은 표, 좁은 화면은 줄 목록. 행을 누르면 종목 상세(차트 위 계획선, 편집도 거기서).
  */
 export function Positions({ my, failed }: { my: MyResponse | undefined; failed: boolean }) {
-  const [sheet, setSheet] = useState<SheetTarget | null>(null);
+  const router = useRouter();
+  const open = (symbol: string) => router.push(`/stocks/${encodeURIComponent(symbol)}`);
   const holdings = my?.holdings ?? [];
   const s = my?.summary;
 
@@ -88,14 +88,14 @@ export function Positions({ my, failed }: { my: MyResponse | undefined; failed: 
                 return (
                   <tr
                     key={h.symbol}
-                    onClick={() => setSheet({ ...h, holding: h })}
+                    onClick={() => open(h.symbol)}
                     className="cursor-pointer border-b border-border last:border-b-0 hover:bg-surface"
                   >
                     <td className="py-3 pr-3">
-                      <button type="button" className="text-left" onClick={() => setSheet({ ...h, holding: h })}>
+                      <Link href={`/stocks/${encodeURIComponent(h.symbol)}`} className="text-left" onClick={(e) => e.stopPropagation()}>
                         <span className="block text-[15px] font-medium">{displayName(h)}</span>
                         <span className="text-[12px] text-text-muted">{h.symbol}</span>
-                      </button>
+                      </Link>
                     </td>
                     <td className="py-3 pr-3 text-right">{h.shares}</td>
                     <td className="py-3 pr-3 text-right">{usd(h.avgCost)}</td>
@@ -128,7 +128,7 @@ export function Positions({ my, failed }: { my: MyResponse | undefined; failed: 
                 <li key={h.symbol} className="border-b border-border last:border-b-0">
                   <button
                     type="button"
-                    onClick={() => setSheet({ ...h, holding: h })}
+                    onClick={() => open(h.symbol)}
                     className="pressable flex w-full items-center gap-3 rounded-2xl px-2 py-3 text-left hover:bg-surface"
                   >
                     <span className="min-w-0 flex-1">
@@ -156,8 +156,6 @@ export function Positions({ my, failed }: { my: MyResponse | undefined; failed: 
           </ul>
         </>
       )}
-
-      <HoldingSheet target={sheet} onClose={() => setSheet(null)} />
     </section>
   );
 }

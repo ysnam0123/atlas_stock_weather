@@ -153,16 +153,7 @@ export class MyService {
       this.capital(),
     ]);
     const closes = await this.lastCloses([...holdings, ...watch].map((x) => x.symbol));
-    const weather = await this.prisma.marketSnapshot.findFirst({
-      where: { market: 'us', condition: { not: null } },
-      orderBy: { tradeDate: 'desc' },
-    });
-    const scan: ScanContext = {
-      hits: watch.length ? await this.latestScan() : new Map(),
-      vcp: watch.length ? await this.latestVcp() : new Map(),
-      spy: watch.length ? await this.bars(BENCHMARK) : [],
-      condition: (weather?.condition ?? null) as Condition | null,
-    };
+    const scan = await this.scanContext(watch.length > 0);
 
     const price = (symbol: string) => {
       const c = closes.get(symbol);
@@ -227,6 +218,99 @@ export class MyService {
           readiness: await this.readiness(w.symbol, scan, capital),
         })),
       ),
+    };
+  }
+
+  /** 매수 규칙 판정에 필요한 그날의 스캔·VCP·SPY·날씨. needed가 false면 날씨만 */
+  private async scanContext(needed: boolean): Promise<ScanContext> {
+    const weather = await this.prisma.marketSnapshot.findFirst({
+      where: { market: 'us', condition: { not: null } },
+      orderBy: { tradeDate: 'desc' },
+    });
+    return {
+      hits: needed ? await this.latestScan() : new Map(),
+      vcp: needed ? await this.latestVcp() : new Map(),
+      spy: needed ? await this.bars(BENCHMARK) : [],
+      condition: (weather?.condition ?? null) as Condition | null,
+    };
+  }
+
+  /**
+   * 종목 상세 (Phase 6): 2년 일봉, 내 보유·관심, AI v2 매수 규칙 판정, 그 종목의 AI 신호·포지션, 내 매매 기록.
+   * 처음 보는 종목이거나 일봉이 SPY보다 오래됐으면 야후에서 바로 받는다 (한 번, 1초 안팎)
+   */
+  async detail(symbol: string) {
+    const info = await this.requireSymbol(symbol);
+    let bars = await this.bars(symbol);
+    const spyLast = await this.prisma.priceBar.findFirst({ where: { symbol: BENCHMARK }, orderBy: { date: 'desc' } });
+    if (!bars.length || (spyLast && bars.at(-1)!.date < day(spyLast.date))) {
+      await this.prices.refresh([symbol]);
+      bars = await this.bars(symbol);
+    }
+    const [holding, watch, capital, signals, positions, trades] = await Promise.all([
+      this.prisma.holding.findUnique({ where: { symbol } }),
+      this.prisma.watchItem.findUnique({ where: { symbol } }),
+      this.capital(),
+      this.prisma.aiSignal.findMany({
+        where: { symbol, account: { active: true } },
+        include: { account: { select: { ruleVersion: true } } },
+        orderBy: { date: 'desc' },
+        take: 12,
+      }),
+      this.prisma.aiPosition.findMany({
+        where: { symbol, account: { active: true } },
+        include: { account: { select: { ruleVersion: true } } },
+        orderBy: { entryDate: 'desc' },
+      }),
+      this.prisma.trade.findMany({ where: { symbol }, orderBy: { date: 'desc' } }),
+    ]);
+    const readiness = bars.length >= 30 ? await this.readiness(symbol, await this.scanContext(true), capital) : null;
+    const last = bars.at(-1);
+    const prev = bars.at(-2);
+    return {
+      symbol,
+      nameEn: info.nameEn,
+      nameKo: info.nameKo,
+      type: info.type,
+      exchange: info.exchange,
+      lastClose: last?.close ?? null,
+      lastDate: last?.date ?? null,
+      changePct: last && prev ? (last.close / prev.close - 1) * 100 : null,
+      bars,
+      holding: holding && {
+        shares: holding.shares,
+        avgCost: holding.avgCost,
+        stopPrice: holding.stopPrice,
+        targetPrice: holding.targetPrice,
+        openedAt: day(holding.openedAt),
+      },
+      watching: !!watch,
+      readiness,
+      signals: signals.map((s) => ({
+        date: day(s.date),
+        version: s.account.ruleVersion,
+        side: s.side,
+        verdict: s.verdict,
+        status: s.status,
+        triggerPrice: s.triggerPrice,
+        stopPrice: s.stopPrice,
+        targetPrice: s.targetPrice,
+        reasonKo: s.reasonKo,
+        note: s.note,
+      })),
+      aiPositions: positions.map((p) => ({
+        version: p.account.ruleVersion,
+        status: p.status,
+        shares: p.shares,
+        entryDate: day(p.entryDate),
+        entryPrice: p.entryPrice,
+        stopPrice: p.stopPrice,
+        targetPrice: p.targetPrice,
+        exitDate: p.exitDate ? day(p.exitDate) : null,
+        exitPrice: p.exitPrice,
+        exitReason: p.exitReason,
+      })),
+      trades: trades.map((t) => ({ id: t.id, date: day(t.date), side: t.side, shares: t.shares, price: t.price, realizedPnl: t.realizedPnl })),
     };
   }
 

@@ -1,5 +1,6 @@
 import type { AiSignal } from "@atlas/contracts";
 import { Check, ChevronDown, X } from "lucide-react";
+import Link from "next/link";
 import { displayName, usd } from "@/features/my/format";
 
 const BADGE: Record<string, { text: string; className: string }> = {
@@ -135,6 +136,9 @@ export function SignalCard({ s }: { s: AiSignal }) {
         )}
 
         {s.note && <p className="text-[13px] text-text-muted">{s.note}</p>}
+        <Link href={`/stocks/${encodeURIComponent(s.symbol)}`} className="pressable inline-flex min-h-9 items-center text-[14px] font-medium text-primary">
+          차트와 상세 보기
+        </Link>
       </div>
     </details>
   );

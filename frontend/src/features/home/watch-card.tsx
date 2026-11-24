@@ -183,9 +183,14 @@ function WatchRow({
           ) : (
             <p className="text-[13px] text-text-muted">일봉을 받으면 다음 실행 때 판단해요.</p>
           )}
-          <button type="button" onClick={onInfo} className="pressable mt-2 min-h-9 text-[13px] font-medium text-primary">
-            뉴스·실적·의원 거래 보기
-          </button>
+          <span className="mt-2 flex gap-4">
+            <Link href={`/stocks/${encodeURIComponent(w.symbol)}`} className="pressable inline-flex min-h-9 items-center text-[13px] font-medium text-primary">
+              차트와 상세
+            </Link>
+            <button type="button" onClick={onInfo} className="pressable min-h-9 text-[13px] font-medium text-text-secondary">
+              뉴스·실적·의원 거래
+            </button>
+          </span>
         </div>
       )}
     </li>

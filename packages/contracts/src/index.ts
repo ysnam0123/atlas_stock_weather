@@ -121,6 +121,61 @@ export interface HomeWeek {
   ai: { opened: number; closed: number; realizedPnl: number };
 }
 
+// ── Phase 6: 종목 상세 ──────────────────────────────
+
+export interface PriceBarRow {
+  /** 뉴욕 장 날짜 */
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface StockDetail {
+  symbol: string;
+  nameEn: string;
+  nameKo: string | null;
+  type: SymbolType;
+  exchange: string;
+  lastClose: number | null;
+  lastDate: string | null;
+  changePct: number | null;
+  /** 오래된 순 최대 2년 */
+  bars: PriceBarRow[];
+  holding: { shares: number; avgCost: number; stopPrice: number | null; targetPrice: number | null; openedAt: string } | null;
+  watching: boolean;
+  /** AI v2 매수 규칙으로 본 지금 상태 (일봉 30개 미만이면 null) */
+  readiness: WatchReadiness | null;
+  /** 이 종목의 최근 AI 신호 (두 계좌) */
+  signals: {
+    date: string;
+    version: AiRuleVersion;
+    side: 'buy' | 'sell';
+    verdict: AiSignal['verdict'];
+    status: AiSignal['status'];
+    triggerPrice: number | null;
+    stopPrice: number | null;
+    targetPrice: number | null;
+    reasonKo: string;
+    note: string | null;
+  }[];
+  aiPositions: {
+    version: AiRuleVersion;
+    status: 'open' | 'closed';
+    shares: number;
+    entryDate: string;
+    entryPrice: number;
+    stopPrice: number;
+    targetPrice: number | null;
+    exitDate: string | null;
+    exitPrice: number | null;
+    exitReason: string | null;
+  }[];
+  trades: { id: string; date: string; side: 'buy' | 'sell'; shares: number; price: number; realizedPnl: number | null }[];
+}
+
 // ── Phase 7: 섹터 지도 ──────────────────────────────
 
 /** leading 높고 오르는 중, weakening 높지만 내리는 중, improving 낮지만 오르는 중, lagging 낮고 내리는 중 */

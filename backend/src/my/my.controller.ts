@@ -64,6 +64,12 @@ export class MyController {
     return this.my.deleteTrade(id);
   }
 
+  /** 종목 상세: 일봉, 내 보유·관심, AI 매수 규칙 판정, AI 신호, 내 매매 기록 */
+  @Get('stocks/:symbol')
+  detail(@Param('symbol') symbol: string) {
+    return this.my.detail(symbol.toUpperCase());
+  }
+
   @Get('stocks/:symbol/intel')
   intel(@Param('symbol') symbol: string) {
     return this.my.intel(norm(symbol));
