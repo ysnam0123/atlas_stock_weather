@@ -160,6 +160,17 @@ export interface WatchReadiness {
   stopPrice: number | null;
   /** 내 총 투자금 기준 수량 */
   mySize: PositionSize | null;
+  /** vcp-screener 결과. 스캔에 없었으면 null */
+  vcp: {
+    valid: boolean;
+    /** Pre-breakout | Breakout | Extended … */
+    state: string;
+    rating: string;
+    pivot: number;
+    /** 종가가 피벗에서 몇 % (음수면 아래) */
+    distancePct: number;
+    contractions: number;
+  } | null;
 }
 
 export interface MySummary {

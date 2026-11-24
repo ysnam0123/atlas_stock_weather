@@ -3,7 +3,8 @@ import { PricesService } from '../jobs/prices.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { stopOptions } from '../holdings/stop-options.js';
 import { BENCHMARK } from '../ai/ai-daily.job.js';
-import type { Bar, Condition } from '../ai/strategy.js';
+import { type Bar, type Condition, type VcpInfo, vcpActive } from '../ai/strategy.js';
+import { adaptVcp } from '../adapters/vcp.adapter.js';
 import { evaluateBuyV2, mySize } from '../ai/strategy-v2.js';
 import { lookupMembers } from '../jobs/congress-members.js';
 
@@ -16,6 +17,7 @@ interface ScanHit {
 
 interface ScanContext {
   hits: Map<string, ScanHit>;
+  vcp: Map<string, VcpInfo>;
   spy: Bar[];
   condition: Condition | null;
 }
@@ -157,6 +159,7 @@ export class MyService {
     });
     const scan: ScanContext = {
       hits: watch.length ? await this.latestScan() : new Map(),
+      vcp: watch.length ? await this.latestVcp() : new Map(),
       spy: watch.length ? await this.bars(BENCHMARK) : [],
       condition: (weather?.condition ?? null) as Condition | null,
     };
@@ -238,6 +241,16 @@ export class MyService {
     return new Map(hits.map((h) => [h.symbol, h]));
   }
 
+  /** 가장 최근 vcp-screener 출력 (ai_daily가 후보 + 관심 종목에 돌린 것) */
+  private async latestVcp(): Promise<Map<string, VcpInfo>> {
+    const out = await this.prisma.skillOutput.findFirst({
+      where: { skillId: 'vcp-screener', status: 'success' },
+      orderBy: { createdAt: 'desc' },
+      select: { rawJson: true },
+    });
+    return adaptVcp(out?.rawJson ?? null);
+  }
+
   private async bars(symbol: string): Promise<Bar[]> {
     const rows = await this.prisma.priceBar.findMany({ where: { symbol }, orderBy: { date: 'asc' } });
     return rows.map((r) => ({ date: day(r.date), open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume }));
@@ -257,8 +270,12 @@ export class MyService {
       where: { type: 'earnings', symbol, date: { gte: new Date(`${last.date}T00:00:00Z`) } },
       orderBy: { date: 'asc' },
     });
+    const vcp = scan.vcp.get(symbol) ?? null;
+    const setups = sameDay ? [...hit.setups] : [];
+    if (vcpActive(vcp) && !setups.includes('vcp')) setups.unshift('vcp');
     const e = evaluateBuyV2({
-      setups: sameDay ? hit.setups : [],
+      vcp,
+      setups,
       rsi: sameDay ? (hit.rsi ?? null) : null,
       bars,
       benchmark: scan.spy,
@@ -275,6 +292,7 @@ export class MyService {
       triggerPrice: e.triggerPrice,
       stopPrice: e.stopPrice,
       mySize: e.verdict === 'watch' ? null : mySize(capital, e.triggerPrice, e.stopPrice),
+      vcp: vcp && { valid: vcp.valid, state: vcp.state, rating: vcp.rating, pivot: vcp.pivot, distancePct: vcp.distancePct, contractions: vcp.contractions },
     };
   }
 

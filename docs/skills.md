@@ -82,3 +82,12 @@ breakout-trade-planner는 새로 살 종목용이다. 이미 보유한 종목은
 - Yahoo Finance는 공식 API가 아니다. 실패 시 해당 종목만 건너뛴다.
 - SEC EDGAR는 `SEC_USER_AGENT` 필수, 초당 요청 제한이 있어 간격을 둔다.
 - 공포지수(VIX)는 MVP 제외. 넣는다면 Yahoo로 별도 수집해야 한다.
+
+## VCP 스크리너 우회 (2026-11-24)
+
+vcp-screener는 FMP 무료 플랜에서 여러 종목 시세 요청(batch quote, 402)과 옛 API(403)가 막혀 그대로는 돌지 않는다.
+`scripts/skills/vcp_local.py`가 스킬의 FMP 클라이언트만 바꿔 끼워 Atlas `price_bars`(야후 2년 일봉)를 넣는다. 판정 로직은 스킬 그대로이고 네트워크 요청은 없다.
+
+- 범위: ai_daily 후보 30개 + 관심 종목 (S&P 500 전체 아님)
+- 없는 값: 시가총액·섹터 (보고서용이라 점수에는 영향 없음)
+- 스킬을 업데이트하면 `vcp.adapter.spec.ts`와 실제 실행으로 다시 확인한다 (클라이언트 메서드 이름이 바뀌면 깨진다)

@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "results": [
+    {
+      "symbol": "AAPL",
+      "composite_score": 55.0,
+      "rating": "Weak VCP",
+      "valid_vcp": false,
+      "execution_state": "Pre-breakout",
+      "distance_from_pivot_pct": -0.75,
+      "pivot_proximity": {
+        "score": 90,
+        "distance_from_pivot_pct": -0.75,
+        "pivot_price": 351.73,
+        "stop_loss_price": 322.08,
+        "risk_pct": 7.73,
+        "trade_status": "AT PIVOT (within 2%)",
+        "error": null
+      },
+      "vcp_pattern": {
+        "valid_vcp": false,
+        "num_contractions": 1,
+        "pivot_price": 351.73
+      }
+    },
+    {
+      "symbol": "LLY",
+      "composite_score": 50.0,
+      "rating": "Weak VCP",
+      "valid_vcp": false,
+      "execution_state": "Pre-breakout",
+      "distance_from_pivot_pct": -5.87,
+      "pivot_proximity": {
+        "score": 60,
+        "distance_from_pivot_pct": -5.87,
+        "pivot_price": 1449.68,
+        "stop_loss_price": 1319.89,
+        "risk_pct": 3.28,
+        "trade_status": "APPROACHING (5-8% below)",
+        "error": null
+      },
+      "vcp_pattern": {
+        "valid_vcp": false,
+        "num_contractions": 1,
+        "pivot_price": 1449.68
+      }
+    },
+    {
+      "symbol": "KYMR",
+      "composite_score": 49.5,
+      "rating": "No VCP",
+      "valid_vcp": false,
+      "execution_state": "Extended",
+      "distance_from_pivot_pct": 5.21,
+      "pivot_proximity": {
+        "score": 50,
+        "distance_from_pivot_pct": 5.21,
+        "pivot_price": 142.92,
+        "stop_loss_price": 113.25,
+        "risk_pct": 24.69,
+        "trade_status": "EXTENDED - High chase risk",
+        "error": null
+      },
+      "vcp_pattern": {
+        "valid_vcp": false,
+        "num_contractions": 1,
+        "pivot_price": 142.92
+      }
+    }
+  ]
+}

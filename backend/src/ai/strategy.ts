@@ -34,9 +34,10 @@ export const RULES = {
 } as const;
 
 /** 추세 추종에 쓰는 셋업. 나머지(과매도 등)는 역추세라 관찰만 한다 */
-const STRONG_SETUPS = new Set(['breakout_20d', 'bull_flag']);
+const STRONG_SETUPS = new Set(['breakout_20d', 'bull_flag', 'vcp']);
 
 export const SETUP_LABEL: Record<string, string> = {
+  vcp: 'VCP (변동성 수축 뒤 피벗 돌파 대기)',
   breakout_20d: '20일 종가 신고가 돌파',
   bull_flag: '깃발형 (급등 뒤 좁은 횡보)',
   reclaim_ma20: '20일선 회복',
@@ -84,7 +85,48 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  */
 export const ENTRY = { offset: 0.01, validDays: 3 } as const;
 
-export const triggerPrice = (signalBar: Bar) => round2(signalBar.high + ENTRY.offset);
+/**
+ * vcp-screener가 찾은 변동성 수축 패턴 (scripts/skills/vcp_local.py).
+ * 유효한 VCP가 돌파 직전·돌파 중이면 셋업 "vcp"가 되고, 조건부 매수가는 고가 대신 피벗이다.
+ */
+export interface VcpInfo {
+  valid: boolean;
+  /** Pre-breakout | Breakout | Extended | ... */
+  state: string;
+  rating: string;
+  score: number;
+  pivot: number;
+  /** 스킬이 계산한 패턴 손절가 (마지막 수축 저점 아래) */
+  stop: number | null;
+  contractions: number;
+  /** 종가가 피벗에서 몇 % (음수면 아래) */
+  distancePct: number;
+}
+
+/** 이 VCP를 셋업으로 쓸 수 있나: 유효하고 돌파 직전이거나 돌파 중 */
+export const vcpActive = (v: VcpInfo | null | undefined): v is VcpInfo =>
+  !!v && v.valid && (v.state === 'Pre-breakout' || v.state === 'Breakout');
+
+/** 조건부 매수가: 쓸 수 있는 VCP가 있고 종가가 피벗 아래면 피벗 + 1센트, 아니면 신호 날 고가 + 1센트 */
+export function triggerPrice(signalBar: Bar, vcp?: VcpInfo | null): number {
+  if (vcpActive(vcp) && vcp.pivot > signalBar.close) return round2(vcp.pivot + ENTRY.offset);
+  return round2(signalBar.high + ENTRY.offset);
+}
+
+/** 셋업 설명. VCP는 수축 횟수와 피벗까지 함께 */
+export function setupDetail(setups: string[], vcp?: VcpInfo | null): string {
+  return setups
+    .map((s) =>
+      s === 'vcp' && vcp
+        ? `VCP 수축 ${vcp.contractions}번, 피벗 ${usd(vcp.pivot)}(종가가 ${vcp.distancePct >= 0 ? '+' : ''}${vcp.distancePct.toFixed(1)}%)`
+        : (SETUP_LABEL[s] ?? s),
+    )
+    .join(', ');
+}
+
+/** VCP 돌파 직전에는 거래량이 마르는 게 정상이라, 신호 날 거래량 대신 돌파하는 날 거래량을 본다 */
+export const vcpWaitsForVolume = (setups: string[], vcp?: VcpInfo | null) =>
+  setups.includes('vcp') && vcp?.state === 'Pre-breakout';
 
 /** 이 봉에서 조건부 매수가 체결되는 가격. 시가가 이미 위면 시가, 장중에 넘으면 조건 가격, 못 넘으면 null */
 export function fillBuyStop(trigger: number, bar: Bar): number | null {
@@ -114,8 +156,9 @@ export function evaluateBuy(input: {
   rsi: number | null;
   bars: Bar[];
   condition: Condition | null;
+  vcp?: VcpInfo | null;
 }): BuyEvaluation {
-  const { bars, setups, rsi, condition } = input;
+  const { bars, setups, rsi, condition, vcp } = input;
   const last = bars[bars.length - 1];
   const closes = bars.map((b) => b.close);
   const ma50 = sma(closes, 50);
@@ -138,7 +181,7 @@ export function evaluateBuy(input: {
       key: 'setup',
       label: '추세 추종 셋업',
       pass: strong.length > 0,
-      detail: setups.map((s) => SETUP_LABEL[s] ?? s).join(', '),
+      detail: setupDetail(setups, vcp),
     },
     {
       key: 'trend',
@@ -156,8 +199,12 @@ export function evaluateBuy(input: {
     {
       key: 'volume',
       label: '거래량 확인',
-      pass: avgVol50 != null && last.volume >= avgVol50 * RULES.volumeMult,
-      detail: avgVol50 == null ? '거래량 이력 부족' : `50일 평균의 ${(last.volume / avgVol50).toFixed(1)}배 (기준 ${RULES.volumeMult}배)`,
+      pass: vcpWaitsForVolume(setups, vcp) || (avgVol50 != null && last.volume >= avgVol50 * RULES.volumeMult),
+      detail: vcpWaitsForVolume(setups, vcp)
+        ? 'VCP 돌파 전이라 거래량은 돌파하는 날 봐요'
+        : avgVol50 == null
+          ? '거래량 이력 부족'
+          : `50일 평균의 ${(last.volume / avgVol50).toFixed(1)}배 (기준 ${RULES.volumeMult}배)`,
     },
     {
       key: 'notHot',
@@ -170,7 +217,7 @@ export function evaluateBuy(input: {
   const stockOk = checks.filter((c) => c.key !== 'market').every((c) => c.pass);
   const verdict: BuyEvaluation['verdict'] = !stockOk ? 'watch' : condition === 'clear' ? 'buy' : 'hold';
 
-  const trigger = triggerPrice(last);
+  const trigger = triggerPrice(last, vcp);
   let stopPrice: number | null = null;
   let targetPrice: number | null = null;
   let exitPlanKo: string | null = null;
@@ -185,7 +232,7 @@ export function evaluateBuy(input: {
   const failed = checks.filter((c) => !c.pass && c.key !== 'market').map((c) => c.label);
   const reasonKo =
     verdict === 'buy'
-      ? `종목 조건을 모두 통과했고 시장도 맑아서, ${ENTRY.validDays}거래일 안에 ${usd(trigger)}(오늘 고가 위)를 넘으면 삽니다.`
+      ? `종목 조건을 모두 통과했고 시장도 맑아서, ${ENTRY.validDays}거래일 안에 ${usd(trigger)}(${vcpActive(vcp) && vcp.pivot > last.close ? 'VCP 피벗' : '오늘 고가 위'})를 넘으면 삽니다.`
       : verdict === 'hold'
         ? '종목 조건은 모두 통과했지만 시장이 맑지 않아 보류합니다. 맑아진 날 같은 신호가 나오면 삽니다.'
         : `${failed.join(', ')} 조건에서 걸려 관찰만 합니다.`;

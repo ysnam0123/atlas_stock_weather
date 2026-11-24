@@ -85,6 +85,15 @@ skills:
     output: watchlist.json
     timeoutSec: 900
 
+  # Phase 5 VCP. FMP 무료 플랜이 여러 종목 시세 요청을 막아서, 스킬 판정 로직에 Atlas 일봉을 넣는 얇은 실행기로 돌린다.
+  # bars.json은 ai_daily가 이번 실행 폴더에 쓴다 (후보 + 관심 종목 + SPY, 2년 일봉). 네트워크 요청 없음
+  vcp-screener:
+    runtime: uv
+    script: scripts/skills/vcp_local.py
+    args: [--bars, '{outputDir}/bars.json', --output-dir, '{outputDir}']
+    output: vcp_screener_*.json
+    timeoutSec: 300
+
   # Phase 3 종목 소식. 표준 라이브러리 + 야후·SEC. SEC_USER_AGENT 필요 (.env). 티커는 실행할 때 붙인다
   trader-news:
     runtime: python3

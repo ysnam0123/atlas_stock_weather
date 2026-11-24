@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import type { AiAccount, Prisma } from '../generated/prisma/client.js';
 import { repoRoot } from '../common/paths.js';
+import { adaptVcp } from '../adapters/vcp.adapter.js';
 import { PricesService } from '../jobs/prices.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SkillRunnerService } from '../skills/skill-runner.service.js';
@@ -18,6 +19,8 @@ import {
   sizePosition,
   sma,
   stepPosition,
+  type VcpInfo,
+  vcpActive,
 } from './strategy.js';
 import { ema, evaluateBuyV2, riskPctV2, RULES_V2, sizePositionV2, stepPositionV2 } from './strategy-v2.js';
 
@@ -35,6 +38,13 @@ const DAY_MS = 86_400_000;
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 const toDate = (s: string) => new Date(`${s}T00:00:00Z`);
+
+interface Candidate {
+  hit: ScanHit;
+  bars: Bar[];
+  daysToEarnings: number | null;
+  vcp: VcpInfo | null;
+}
 
 interface ScanHit {
   symbol: string;
@@ -314,8 +324,9 @@ export class AiDailyJob {
       .sort((a, b) => Number(isTrend(b)) - Number(isTrend(a)) || dollarVolume(b) - dollarVolume(a))
       .slice(0, MAX_CANDIDATES);
     await this.prices.refresh(ranked.map((h) => h.symbol));
+    const vcp = await this.vcp(runId, ranked.map((h) => h.symbol));
 
-    const candidates: { hit: ScanHit; bars: Bar[]; daysToEarnings: number | null }[] = [];
+    const candidates: Candidate[] = [];
     const earnings = await this.prisma.calendarEvent.findMany({
       where: { type: 'earnings', symbol: { in: ranked.map((h) => h.symbol) }, date: { gte: new Date(Date.now() - DAY_MS) } },
       orderBy: { date: 'asc' },
@@ -325,7 +336,10 @@ export class AiDailyJob {
       if (bars.length < 30 || bars.at(-1)!.date !== hit.close_date) continue;
       const next = earnings.find((e) => e.symbol === hit.symbol);
       const daysToEarnings = next ? Math.round((next.date.getTime() - toDate(hit.close_date).getTime()) / DAY_MS) : null;
-      candidates.push({ hit, bars, daysToEarnings });
+      // 유효한 VCP가 돌파 직전·돌파 중이면 셋업에 더한다 (조건부 매수가는 피벗)
+      const v = vcp.get(hit.symbol) ?? null;
+      if (vcpActive(v) && !hit.setups.includes('vcp')) hit.setups = ['vcp', ...hit.setups];
+      candidates.push({ hit, bars, daysToEarnings, vcp: v });
     }
     const spy = await this.bars(BENCHMARK);
 
@@ -333,10 +347,36 @@ export class AiDailyJob {
     return candidates.length;
   }
 
+  /**
+   * vcp-screener를 후보 + 관심 종목에 돌린다 (scripts/skills/vcp_local.py, FMP 대신 우리 일봉).
+   * 실패하면 VCP 없이 계속한다 (절대 규칙 4). 원본은 SkillRunner가 skill_outputs에 남긴다
+   */
+  private async vcp(runId: string, symbols: string[]): Promise<Map<string, VcpInfo>> {
+    try {
+      const watch = await this.prisma.watchItem.findMany({ select: { symbol: true } });
+      const bars: Record<string, Bar[]> = {};
+      for (const symbol of new Set([...symbols, ...watch.map((w) => w.symbol), BENCHMARK])) {
+        const b = await this.bars(symbol);
+        if (b.length) bars[symbol] = b;
+      }
+      const dir = join(repoRoot(), 'reports', runId, 'vcp-screener');
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, 'bars.json'), JSON.stringify({ bars }));
+      const result = await this.skills.run(runId, 'vcp-screener');
+      if (result.status !== 'success') throw new Error(result.error ?? 'VCP 스크리너 실패');
+      const map = adaptVcp(result.json);
+      this.logger.log(`VCP ${map.size}종목, 셋업으로 쓸 수 있는 것 ${[...map.values()].filter(vcpActive).length}개`);
+      return map;
+    } catch (err) {
+      this.logger.warn(`VCP 건너뜀: ${String(err).slice(0, 200)}`);
+      return new Map();
+    }
+  }
+
   /** 한 계좌의 규칙으로 후보를 판단하고, 매수면 수량까지 계획한다 */
   private async judge(
     account: AiAccount,
-    candidates: { hit: ScanHit; bars: Bar[]; daysToEarnings: number | null }[],
+    candidates: Candidate[],
     spy: Bar[],
     condition: Condition | null,
     ceiling: number | null,
@@ -366,10 +406,10 @@ export class AiDailyJob {
     const maxNew = v2 ? RULES_V2.maxNewPerDay : RULES.maxNewPerDay;
     let newBuys = 0;
 
-    for (const { hit, bars, daysToEarnings } of candidates) {
+    for (const { hit, bars, daysToEarnings, vcp } of candidates) {
       const e = v2
-        ? evaluateBuyV2({ setups: hit.setups, rsi: hit.rsi ?? null, bars, benchmark: spy, condition, daysToEarnings })
-        : evaluateBuy({ setups: hit.setups, rsi: hit.rsi ?? null, bars, condition });
+        ? evaluateBuyV2({ setups: hit.setups, rsi: hit.rsi ?? null, bars, benchmark: spy, condition, daysToEarnings, vcp })
+        : evaluateBuy({ setups: hit.setups, rsi: hit.rsi ?? null, bars, condition, vcp });
 
       let status: string = e.verdict === 'buy' ? 'planned' : e.verdict === 'hold' ? 'held' : 'watch';
       let shares: number | null = null;

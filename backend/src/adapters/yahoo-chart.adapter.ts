@@ -1,6 +1,7 @@
 // Yahoo Finance 차트 응답 → 정규장 일봉. 공식 API가 아니라 실패하면 그 종목만 건너뛴다 (docs/skills.md).
 
-export const yahooChartUrl = (ticker: string, range = '1y') =>
+/** 2년: VCP 스크리너가 253거래일 넘게, v2가 200일선의 한 달 전 값까지 본다 */
+export const yahooChartUrl = (ticker: string, range = '2y') =>
   `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=1d`;
 
 export interface Bar {

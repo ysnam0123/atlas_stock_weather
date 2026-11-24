@@ -2,7 +2,20 @@
 // 근거: 미너비니 추세 템플릿, 오닐 CANSLIM(7~8% 손절, 돌파 거래량, 주도주), 추세 추종의 "이익은 길게".
 // 전부 결정론적 계산이다 (절대 규칙 2).
 
-import { atr, type Bar, type Check, type Condition, ENTRY, SETUP_LABEL, sma, type Step, triggerPrice } from './strategy.js';
+import {
+  atr,
+  type Bar,
+  type Check,
+  type Condition,
+  ENTRY,
+  setupDetail,
+  sma,
+  type Step,
+  triggerPrice,
+  type VcpInfo,
+  vcpActive,
+  vcpWaitsForVolume,
+} from './strategy.js';
 
 export const RULES_V2 = {
   riskPct: 0.01,
@@ -33,7 +46,7 @@ export const RULES_V2 = {
   timeStopDays: 15,
 } as const;
 
-const STRONG_SETUPS = new Set(['breakout_20d', 'bull_flag']);
+const STRONG_SETUPS = new Set(['breakout_20d', 'bull_flag', 'vcp']);
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 /** 체크리스트 설명에 실제 대소를 쓴다 (통과하지 못했는데 ">"로 보이지 않게) */
@@ -69,8 +82,9 @@ export function evaluateBuyV2(input: {
   condition: Condition | null;
   /** 다음 실적 발표까지 남은 달력일. 모르면 null */
   daysToEarnings: number | null;
+  vcp?: VcpInfo | null;
 }): BuyEvaluationV2 {
-  const { bars, setups, rsi, condition, benchmark, daysToEarnings } = input;
+  const { bars, setups, rsi, condition, benchmark, daysToEarnings, vcp } = input;
   const last = bars[bars.length - 1];
   const closes = bars.map((b) => b.close);
   const ma50 = sma(closes, 50);
@@ -109,7 +123,7 @@ export function evaluateBuyV2(input: {
       key: 'setup',
       label: '추세 추종 셋업',
       pass: strong.length > 0,
-      detail: setups.map((s) => SETUP_LABEL[s] ?? s).join(', '),
+      detail: setupDetail(setups, vcp),
     },
     {
       key: 'trend',
@@ -144,8 +158,12 @@ export function evaluateBuyV2(input: {
     {
       key: 'volume',
       label: '돌파 거래량',
-      pass: avgVol50 != null && last.volume >= avgVol50 * RULES_V2.volumeMult,
-      detail: avgVol50 == null ? '거래량 이력 부족' : `50일 평균의 ${(last.volume / avgVol50).toFixed(1)}배 (기준 ${RULES_V2.volumeMult}배)`,
+      pass: vcpWaitsForVolume(setups, vcp) || (avgVol50 != null && last.volume >= avgVol50 * RULES_V2.volumeMult),
+      detail: vcpWaitsForVolume(setups, vcp)
+        ? 'VCP 돌파 전이라 거래량은 돌파하는 날 봐요'
+        : avgVol50 == null
+          ? '거래량 이력 부족'
+          : `50일 평균의 ${(last.volume / avgVol50).toFixed(1)}배 (기준 ${RULES_V2.volumeMult}배)`,
     },
     {
       key: 'notHot',
@@ -165,7 +183,7 @@ export function evaluateBuyV2(input: {
   const stockOk = checks.filter((c) => c.key !== 'market').every((c) => c.pass);
   const verdict: BuyEvaluationV2['verdict'] = !stockOk ? 'watch' : condition === 'clear' ? 'buy' : 'hold';
 
-  const trigger = triggerPrice(last);
+  const trigger = triggerPrice(last, vcp);
   let stopPrice: number | null = null;
   let exitPlanKo: string | null = null;
   if (a != null && a > 0) {
@@ -177,7 +195,7 @@ export function evaluateBuyV2(input: {
   const failed = checks.filter((c) => !c.pass && c.key !== 'market').map((c) => c.label);
   const reasonKo =
     verdict === 'buy'
-      ? `종목 조건 8개를 모두 통과했고 시장도 맑아서, ${ENTRY.validDays}거래일 안에 ${usd(trigger)}(오늘 고가 위)를 넘으면 삽니다. 시가가 그보다 3% 넘게 높게 시작하면 추격하지 않아요.`
+      ? `종목 조건 8개를 모두 통과했고 시장도 맑아서, ${ENTRY.validDays}거래일 안에 ${usd(trigger)}(${vcpActive(vcp) && vcp.pivot > last.close ? 'VCP 피벗' : '오늘 고가 위'})를 넘으면 삽니다. 시가가 그보다 3% 넘게 높게 시작하면 추격하지 않아요.`
       : verdict === 'hold'
         ? '종목 조건 8개를 모두 통과했지만 시장이 맑지 않아 보류합니다.'
         : `${failed.join(', ')} 조건에서 걸려 관찰만 합니다.`;

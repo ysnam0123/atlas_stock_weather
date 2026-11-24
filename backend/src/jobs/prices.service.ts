@@ -9,7 +9,7 @@ export const PRICES_DAILY = 'prices_daily';
 const GAP_MS = 400;
 
 /**
- * 보유·관심 종목의 1년치 일봉을 야후에서 받아 price_bars에 넣는다.
+ * 보유·관심 종목의 2년치 일봉을 야후에서 받아 price_bars에 넣는다.
  * 실패한 종목은 건너뛰고 나머지를 계속한다 (절대 규칙 4).
  */
 @Injectable()

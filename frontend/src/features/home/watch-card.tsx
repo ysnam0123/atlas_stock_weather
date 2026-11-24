@@ -8,6 +8,22 @@ import { changeText, displayName, usd } from "@/features/my/format";
 import { tradeDay } from "@/shared/lib/time";
 import { SectionTitle } from "./section";
 
+const VCP_RATING: Record<string, string> = {
+  "Textbook VCP": "교과서형",
+  "Strong VCP": "강한 VCP",
+  "Good VCP": "좋은 VCP",
+  "Developing VCP": "만들어지는 중",
+  "Weak VCP": "약함",
+  "No VCP": "VCP 아님",
+};
+const VCP_STATE: Record<string, string> = { "Pre-breakout": "돌파 직전", Breakout: "돌파 중", Extended: "이미 많이 오름" };
+
+/** VCP 한 줄: "약함, 수축 1번, 피벗 $351.73까지 0.8%" */
+function vcpLine(v: NonNullable<WatchReadiness["vcp"]>) {
+  const where = v.distancePct < 0 ? `피벗 ${usd(v.pivot)}까지 ${Math.abs(v.distancePct).toFixed(1)}%` : `피벗 ${usd(v.pivot)}보다 ${v.distancePct.toFixed(1)}% 위`;
+  return `${VCP_RATING[v.rating] ?? v.rating}, 수축 ${v.contractions}번, ${where}${VCP_STATE[v.state] ? ` (${VCP_STATE[v.state]})` : ""}`;
+}
+
 /** 한 줄 상태: 왜 아직 대기인지. 시장 조건은 따로 빼고 종목 조건만 센다 */
 function status(r: WatchReadiness | null): { text: string; tone: string } {
   if (!r) return { text: "판단할 일봉이 아직 없어요", tone: "text-text-muted" };
@@ -127,6 +143,11 @@ function WatchRow({
         <div id={panelId} className="pb-3">
           {r ? (
             <>
+              {r.vcp && (
+                <p className="mb-1.5 text-[13px] text-text-secondary">
+                  <span className="text-text-muted">VCP</span> {vcpLine(r.vcp)}
+                </p>
+              )}
               <p className="text-[13px] text-text-secondary">
                 종목 조건 {stockChecks.length}개 중 {passed}개 통과
                 {r.checks.find((c) => c.key === "market" && !c.pass) && ", 시장이 맑지 않아 새 매수는 쉼"}
