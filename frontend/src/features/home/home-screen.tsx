@@ -57,7 +57,7 @@ export function HomeScreen() {
       <div className="max-lg:contents lg:grid lg:items-start lg:gap-x-12 lg:gap-y-10 lg:rounded-[24px] lg:border lg:border-border lg:bg-surface-raised lg:p-8 lg:shadow-card xl:grid-cols-2">
         <div className={`${MOBILE_CARD} max-lg:order-1 lg:col-span-full lg:border-b lg:border-border lg:pb-8`}>
           {weather ? (
-            <MarketPosture weather={weather} my={my.data} now={now} onSetCapital={openCapital} />
+            <MarketPosture weather={weather} my={my.data} now={now} onSetCapital={openCapital} sessionNote={data.sessionNote} />
           ) : (
             <p className="text-[17px] text-text-muted">시장 날씨 데이터 없음</p>
           )}

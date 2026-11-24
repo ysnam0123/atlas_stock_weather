@@ -5,6 +5,7 @@ import { MARKET_DAILY } from '../jobs/market-daily.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MARKET_DAILY_SLOT } from '../scheduler/scheduler.service.js';
 import { nextSlot } from '../scheduler/slots.js';
+import { lastNightHoliday, US_EARLY_CLOSES } from '../scheduler/us-market-calendar.js';
 
 /** 흐름 차트: 최근 1년(거래일 기준) */
 const HISTORY_DAYS = 260;
@@ -35,7 +36,13 @@ export class HomeService {
       this.earnings(),
       this.intel(),
     ]);
-    return { market, weather, history, sectors, sectorHistory, run, earnings, intel, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
+    const holiday = lastNightHoliday();
+    const sessionNote = holiday
+      ? { kind: 'holiday' as const, ...holiday }
+      : weather && US_EARLY_CLOSES.has(weather.tradeDate)
+        ? { kind: 'early' as const, date: weather.tradeDate, name: '조기 폐장' }
+        : null;
+    return { market, weather, history, sectors, sectorHistory, run, earnings, intel, sessionNote, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
   }
 
   /**

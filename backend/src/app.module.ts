@@ -10,10 +10,12 @@ import { MyController } from './my/my.controller.js';
 import { MyService } from './my/my.service.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RunsController } from './runs/runs.controller.js';
+import { SectorsController } from './sectors/sectors.controller.js';
+import { SectorsService } from './sectors/sectors.service.js';
 
 @Module({
   imports: [PrismaModule, JobsModule],
-  controllers: [AiController, AppController, HomeController, MyController, RunsController],
-  providers: [AiService, AppService, HomeService, MyService],
+  controllers: [AiController, AppController, HomeController, MyController, RunsController, SectorsController],
+  providers: [AiService, AppService, HomeService, MyService, SectorsService],
 })
 export class AppModule {}

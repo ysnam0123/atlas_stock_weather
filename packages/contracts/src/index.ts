@@ -79,7 +79,44 @@ export interface HomeResponse {
   earnings: HomeEarnings[];
   /** 내 보유·관심 종목의 중요한 새 소식(3일)과 의원 거래 신고(30일) */
   intel: { news: HomeIntelNews[]; congressFlows: HomeCongressFlow[] };
+  /** 어젯밤 미국장이 휴장이었거나, 화면의 장이 조기 폐장(오후 1시)이었으면. date는 뉴욕 날짜 */
+  sessionNote: { kind: 'holiday' | 'early'; date: string; name: string } | null;
   nextRunAt: string | null;
+}
+
+// ── Phase 7: 섹터 지도 ──────────────────────────────
+
+/** leading 높고 오르는 중, weakening 높지만 내리는 중, improving 낮지만 오르는 중, lagging 낮고 내리는 중 */
+export type SectorPhase = 'leading' | 'weakening' | 'improving' | 'lagging';
+
+export interface SectorRow {
+  sector: string;
+  rank: number;
+  /** 섹터 안 종목 중 상승추세인 비율 (0~1) */
+  uptrendRatio: number;
+  /** 비율 차이 (0.03 = 3%p). 이력이 모자라면 null */
+  change1w: number | null;
+  change1m: number | null;
+  /** 1개월 전 순위 */
+  rank1m: number | null;
+  trend: string | null;
+  status: string | null;
+  /** 최근 1년 가운데값 */
+  median1y: number | null;
+  /** SectorsResponse.dates와 같은 길이, 빠진 날은 null */
+  history: (number | null)[];
+  /** 대표 섹터 ETF 수익률 (0.05 = 5%). rs3m은 3개월 수익률 − S&P 500 3개월 수익률 */
+  etf: { symbol: string; close: number; w1: number | null; m1: number | null; m3: number | null; rs3m: number | null } | null;
+  phase: SectorPhase;
+}
+
+export interface SectorsResponse {
+  tradeDate: string | null;
+  /** 오래된 날부터 최근 1년 */
+  dates: string[];
+  spy: { w1: number | null; m1: number | null; m3: number | null } | null;
+  /** 순위 순 */
+  sectors: SectorRow[];
 }
 
 // ── Phase 2: 종목 검색, 내 종목, 손절가 ──────────────────────────────

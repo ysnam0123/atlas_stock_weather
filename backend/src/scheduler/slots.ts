@@ -8,12 +8,15 @@ export interface Slot {
   days: number[];
   /** "HH:MM" KST */
   times: string[];
+  /** 이 한국 날짜(YYYY-MM-DD)는 건너뛴다. 예: 어젯밤 미국장이 휴장이면 시장 수집을 쉬기 */
+  skip?: (kstDate: string) => boolean;
 }
 
 /** 그날(KST 자정 기준)의 실행 시각들. 반환값은 KST 벽시계 기준 ms */
 function slotTimesOn(slot: Slot, dayStart: number): number[] {
   const weekday = new Date(dayStart).getUTCDay();
   if (!slot.days.includes(weekday)) return [];
+  if (slot.skip?.(new Date(dayStart).toISOString().slice(0, 10))) return [];
   return slot.times.map((t) => {
     const [h, m] = t.split(':').map(Number);
     return dayStart + (h * 60 + m) * 60 * 1000;
@@ -28,7 +31,7 @@ export function latestDueSlot(slot: Slot, now: Date = new Date()): Date | null {
   const kstNow = now.getTime() + KST_OFFSET_MS;
   const kstMidnight = Math.floor(kstNow / DAY_MS) * DAY_MS;
 
-  for (let back = 0; back < 8; back++) {
+  for (let back = 0; back < 10; back++) {
     const due = slotTimesOn(slot, kstMidnight - back * DAY_MS)
       .filter((t) => t <= kstNow)
       .sort((a, b) => b - a)[0];
@@ -42,7 +45,7 @@ export function nextSlot(slot: Slot, now: Date = new Date()): Date | null {
   const kstNow = now.getTime() + KST_OFFSET_MS;
   const kstMidnight = Math.floor(kstNow / DAY_MS) * DAY_MS;
 
-  for (let ahead = 0; ahead < 8; ahead++) {
+  for (let ahead = 0; ahead < 10; ahead++) {
     const next = slotTimesOn(slot, kstMidnight + ahead * DAY_MS)
       .filter((t) => t > kstNow)
       .sort((a, b) => a - b)[0];

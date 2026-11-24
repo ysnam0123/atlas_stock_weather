@@ -10,13 +10,19 @@ import { STOCK_INTEL, StockIntelJob } from '../jobs/stock-intel.job.js';
 import { SYMBOLS_WEEKLY, SymbolsWeeklyJob } from '../jobs/symbols-weekly.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestDueSlot, type Slot } from './slots.js';
+import { isUsTradingDay, usSessionBefore } from './us-market-calendar.js';
 
 /**
  * TraderMonty CSV는 한국 시간 11~13시에 전날 미국장 데이터로 갱신된다 (2026-11 확인).
  * 그래서 13:30에 받고, 늦게 올라오는 날을 위해 18:00에 한 번 더 받는다.
  * 같은 거래일은 덮어쓰므로 두 번 돌아도 중복되지 않는다.
  */
-export const MARKET_DAILY_SLOT: Slot = { days: [2, 3, 4, 5, 6], times: ['13:30', '18:00'] };
+export const MARKET_DAILY_SLOT: Slot = {
+  days: [2, 3, 4, 5, 6],
+  times: ['13:30', '18:00'],
+  // 어젯밤 미국장이 휴장이면 새 데이터가 없다 (추수감사절 등)
+  skip: (kstDate) => !isUsTradingDay(usSessionBefore(kstDate)),
+};
 
 /** 워커가 꺼져 있던 날의 상승추세·섹터 값을 주 1회 메운다 (시장 점수는 못 메운다) */
 const BACKFILL_UPTREND_SLOT: Slot = { days: [0], times: ['10:00'] };

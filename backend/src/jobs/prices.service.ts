@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { yahooTicker } from '../adapters/symbols.adapter.js';
 import { adaptYahooChart, yahooChartUrl } from '../adapters/yahoo-chart.adapter.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SECTOR_ETF_SYMBOLS } from '../sectors/sectors.service.js';
 
 export const PRICES_DAILY = 'prices_daily';
 
@@ -9,7 +10,7 @@ export const PRICES_DAILY = 'prices_daily';
 const GAP_MS = 400;
 
 /**
- * 보유·관심 종목의 2년치 일봉을 야후에서 받아 price_bars에 넣는다.
+ * 보유·관심 종목과 섹터 ETF의 2년치 일봉을 야후에서 받아 price_bars에 넣는다.
  * 실패한 종목은 건너뛰고 나머지를 계속한다 (절대 규칙 4).
  */
 @Injectable()
@@ -25,7 +26,8 @@ export class PricesService {
       this.prisma.holding.findMany({ select: { symbol: true } }),
       this.prisma.watchItem.findMany({ select: { symbol: true } }),
     ]);
-    const symbols = [...new Set([...holdings, ...watch].map((s) => s.symbol))];
+    // 섹터 지도용 섹터 ETF 11개 + SPY도 같이 받는다
+    const symbols = [...new Set([...holdings, ...watch].map((s) => s.symbol).concat(SECTOR_ETF_SYMBOLS))];
     const result = await this.refresh(symbols);
     const status = result.failed.length === 0 ? 'success' : result.ok.length ? 'partial' : 'failed';
     await this.prisma.run.update({

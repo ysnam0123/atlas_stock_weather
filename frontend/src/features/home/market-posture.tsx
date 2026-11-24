@@ -1,6 +1,6 @@
 "use client";
 
-import type { HomeWeather, MarketCondition, MyResponse } from "@atlas/contracts";
+import type { HomeResponse, HomeWeather, MarketCondition, MyResponse } from "@atlas/contracts";
 import type { ReactNode } from "react";
 import { Term } from "@/features/learn/term";
 import { CONDITION, conclusion, pct, sessionLabel } from "./format";
@@ -31,8 +31,10 @@ export function MarketPosture({
   my,
   now,
   onSetCapital,
+  sessionNote,
 }: {
   weather: HomeWeather;
+  sessionNote: HomeResponse["sessionNote"];
   my: MyResponse | undefined;
   now: Date;
   onSetCapital: () => void;
