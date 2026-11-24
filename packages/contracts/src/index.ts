@@ -78,7 +78,7 @@ export interface HomeResponse {
   /** 내 보유·관심·AI 보유 종목의 다가오는 실적 발표 */
   earnings: HomeEarnings[];
   /** 내 보유·관심 종목의 중요한 새 소식(3일)과 의원 거래 신고(30일) */
-  intel: { news: HomeIntelNews[]; congress: HomeIntelCongress[] };
+  intel: { news: HomeIntelNews[]; congressFlows: HomeCongressFlow[] };
   nextRunAt: string | null;
 }
 
@@ -369,18 +369,16 @@ export interface CongressMemberInfo {
   committees: string[];
 }
 
-export interface HomeIntelCongress {
+/** 서로 다른 의원 3명 이상이 30일 안에 한쪽으로 거래한 내 종목 (반대쪽은 1명 이하) */
+export interface HomeCongressFlow {
   symbol: string;
   nameEn: string;
   nameKo: string | null;
   tracked: 'holding' | 'watch';
-  member: string;
-  memberInfo: CongressMemberInfo | null;
-  /** P 매수, S 매도, S (partial) 일부 매도, E 교환 */
-  type: string;
-  amount: string;
-  tradeDate: string | null;
-  filed: string;
+  side: 'buy' | 'sell';
+  /** 산 의원 수, 판 의원 수 (사람 수) */
+  buyers: number;
+  sellers: number;
 }
 
 export interface StockIntel {

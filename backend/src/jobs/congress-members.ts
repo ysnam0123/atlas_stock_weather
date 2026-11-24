@@ -91,6 +91,27 @@ export async function lookupMembers(prisma: PrismaService, codes: (string | null
   return out;
 }
 
+/** 같은 방향으로 몰렸다고 보는 서로 다른 의원 수. 반대쪽은 이 수 미만이어야 한다 */
+export const FLOW_MIN_MEMBERS = 3;
+
+/**
+ * 종목별로 서로 다른 의원이 몇 명 샀고 팔았는지 센다. 한쪽이 3명 이상이고 반대쪽이 1명 이하면 "쏠림".
+ * 한 의원이 여러 번 거래해도 한 명으로 센다 (거래 수가 아니라 사람 수).
+ */
+export function congressFlows(trades: { symbol: string; member: string; type: string }[]) {
+  const by = new Map<string, { buyers: Set<string>; sellers: Set<string> }>();
+  for (const t of trades) {
+    const g = by.get(t.symbol) ?? { buyers: new Set<string>(), sellers: new Set<string>() };
+    if (t.type === 'P') g.buyers.add(t.member);
+    else if (t.type.startsWith('S')) g.sellers.add(t.member);
+    by.set(t.symbol, g);
+  }
+  return [...by]
+    .map(([symbol, g]) => ({ symbol, buyers: g.buyers.size, sellers: g.sellers.size }))
+    .filter((f) => Math.max(f.buyers, f.sellers) >= FLOW_MIN_MEMBERS && Math.min(f.buyers, f.sellers) <= 1)
+    .map((f) => ({ ...f, side: f.buyers > f.sellers ? ('buy' as const) : ('sell' as const) }));
+}
+
 /** 화면용: "공화당", "오하이오 6구", ["에너지·상업", "외교"] */
 export function memberInfo(m: MemberRow | null) {
   if (!m) return null;

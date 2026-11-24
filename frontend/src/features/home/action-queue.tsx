@@ -1,9 +1,10 @@
-import type { AiSignal, HomeEarnings, HomeWeather, MyResponse } from "@atlas/contracts";
+import type { AiSignal, HomeCongressFlow, HomeEarnings, HomeWeather, MyResponse } from "@atlas/contracts";
 import {
   CalendarDays,
   ChevronRight,
   CloudSun,
   Flag,
+  Landmark,
   PieChart,
   ShieldAlert,
   Star,
@@ -31,7 +32,8 @@ interface Action {
 
 /**
  * 오늘 할 일 (급한 순): 손절가 → AI 매도 신호 → 실적 발표 → 비중 초과 → 목표가 → 손절가 없음 → 설정 → 시장 → AI 매수.
- * 행동할 것만 둔다. 뉴스·의원 거래는 "내 종목 소식"(intel-feed), 관심 종목 상태는 관심 카드에서 본다.
+ * 행동할 것만 둔다. 뉴스는 "내 종목 소식"(intel-feed), 관심 종목 상태는 관심 카드에서 본다.
+ * 의원 거래는 여러 명이 한쪽으로 몰릴 때만 한 줄 (낱개 신고는 종목 소식 시트에서).
  * 날씨 판정과 내 종목 상태에서 규칙대로 만든다 (Claude를 쓰지 않는다). 선택과 주문은 사용자가 한다.
  */
 export function ActionQueue({
@@ -39,7 +41,9 @@ export function ActionQueue({
   my,
   aiSignals,
   earnings,
+  congressFlows,
   now,
+  onInfo,
   onOpenConditions,
   onSetCapital,
 }: {
@@ -49,7 +53,10 @@ export function ActionQueue({
   /** 가장 최근 장의 AI 신호. 내 종목 매도 신호와 AI 조건부 주문만 쓴다 */
   aiSignals: AiSignal[];
   earnings: HomeEarnings[];
+  /** 내 종목에 의원 3명 이상이 한쪽으로 몰린 경우만 */
+  congressFlows: HomeCongressFlow[];
   now: Date;
+  onInfo: (target: { symbol: string; nameKo: string | null; nameEn: string }) => void;
   onOpenConditions: () => void;
   onSetCapital: () => void;
 }) {
@@ -99,6 +106,19 @@ export function ActionQueue({
       text: `${displayName(e)} 실적 발표 ${d === 0 ? "오늘" : `D-${d}`}`,
       sub: "발표 날은 크게 움직일 수 있어요. 손절가와 비중을 미리 확인해 두세요",
       href: "/my",
+    });
+  }
+
+  // 의원 거래 쏠림: 서로 다른 의원 3명 이상이 30일 안에 같은 방향 (신고가 늦어 참고용)
+  for (const f of congressFlows) {
+    const n = f.side === "buy" ? f.buyers : f.sellers;
+    actions.push({
+      key: `congress-${f.symbol}`,
+      icon: Landmark,
+      muted: true,
+      text: `${displayName(f)}, 의원 ${n}명이 ${f.side === "buy" ? "샀어요" : "팔았어요"}`,
+      sub: `30일 안 신고 기준, 반대쪽은 ${f.side === "buy" ? f.sellers : f.buyers}명. 거래 뒤 늦게 신고되는 공개 자료예요`,
+      onClick: () => onInfo(f),
     });
   }
 

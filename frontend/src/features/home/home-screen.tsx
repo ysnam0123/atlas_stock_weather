@@ -9,6 +9,7 @@ import { ActionQueue } from "./action-queue";
 import { AiSignalCard, primaryAccount } from "./ai-signal-card";
 import { BriefingFooter } from "./briefing-footer";
 import { CapitalSheet } from "./capital-sheet";
+import { CommentaryCard } from "./commentary-card";
 import { IntelFeed } from "./intel-feed";
 import { MarketDetail } from "./market-detail";
 import { MarketPosture } from "./market-posture";
@@ -28,8 +29,8 @@ function scrollToId(id: string) {
 
 /**
  * 트레이더 홈 (docs/frontend.md "홈 구성"). 트레이더가 아침에 묻는 순서대로:
- * 시장 자세(날씨·권장 비중·내 비중·자세) → 오늘 할 일 → 보유 종목 → 관심 → 일정 → 섹터 → 흐름과 근거.
- * 데스크톱: 가운데 큰 패널 + 오른쪽 카드 열(관심, 이번 주). 모바일: 카드가 위 순서로 쌓인다.
+ * 시장 자세 → Claude 해설 → 오늘 할 일 → 보유 종목 → 내 종목 소식 → AI 신호 → 관심 → 일정 → 섹터 → 흐름과 근거.
+ * 데스크톱: 가운데 큰 패널 + 오른쪽 카드 열(해설, 관심, 일정). 모바일: 카드가 위 순서로 쌓인다.
  * 모바일 순서를 맞추려고 패널과 오른쪽 열은 모바일에서 display: contents로 풀고 order로 줄 세운다.
  */
 export function HomeScreen() {
@@ -56,28 +57,30 @@ export function HomeScreen() {
       <div className="max-lg:contents lg:grid lg:items-start lg:gap-x-12 lg:gap-y-10 lg:rounded-[24px] lg:border lg:border-border lg:bg-surface-raised lg:p-8 lg:shadow-card xl:grid-cols-2">
         <div className={`${MOBILE_CARD} max-lg:order-1 lg:col-span-full lg:border-b lg:border-border lg:pb-8`}>
           {weather ? (
-            <MarketPosture
-              weather={weather}
-              my={my.data}
-              now={now}
-              onSetCapital={openCapital}
-              news={<IntelFeed intel={data.intel} now={now} onInfo={setInfo} />}
-            />
+            <MarketPosture weather={weather} my={my.data} now={now} onSetCapital={openCapital} />
           ) : (
             <p className="text-[17px] text-text-muted">시장 날씨 데이터 없음</p>
           )}
         </div>
-        {/* 데스크톱: 섹터 순위 왼쪽, 오늘 할 일 오른쪽. 모바일은 order로 오늘 할 일이 먼저 */}
+        {/* 데스크톱: 내 종목 소식 | AI 신호, 섹터 순위 | 오늘 할 일. 모바일은 order로 급한 것부터 */}
+        <div className={`${MOBILE_CARD} max-lg:order-5`}>
+          <IntelFeed intel={data.intel} now={now} onInfo={setInfo} />
+        </div>
         <div className={`${MOBILE_CARD} max-lg:order-6`}>
+          <AiSignalCard ai={ai.data} failed={ai.isError} />
+        </div>
+        <div className={`${MOBILE_CARD} max-lg:order-9`}>
           <SectorRanking sectors={data.sectors} />
         </div>
-        <div className={`${MOBILE_CARD} max-lg:order-2`}>
+        <div className={`${MOBILE_CARD} max-lg:order-3`}>
           <ActionQueue
             weather={weather}
             my={my.data}
             aiSignals={(primaryAccount(ai.data)?.signals ?? []).filter((s) => s.date === primaryAccount(ai.data)?.signals[0]?.date)}
             earnings={data.earnings}
+            congressFlows={data.intel.congressFlows}
             now={now}
+            onInfo={setInfo}
             onSetCapital={openCapital}
             onOpenConditions={() => {
               setDetailOpen(true);
@@ -85,32 +88,32 @@ export function HomeScreen() {
             }}
           />
         </div>
-        <div className={`${MOBILE_CARD} max-lg:order-3 lg:col-span-full`}>
+        <div className={`${MOBILE_CARD} max-lg:order-4 lg:col-span-full`}>
           <Positions my={my.data} failed={my.isError} />
         </div>
         <MarketDetail
           home={data}
           open={detailOpen}
           onToggle={() => setDetailOpen((v) => !v)}
-          className={`${MOBILE_CARD} max-lg:order-7 lg:col-span-full lg:border-t lg:border-border lg:pt-8`}
+          className={`${MOBILE_CARD} max-lg:order-10 lg:col-span-full lg:border-t lg:border-border lg:pt-8`}
         />
-        <div className="max-lg:order-8 lg:col-span-full">
+        <div className="max-lg:order-11 lg:col-span-full">
           <BriefingFooter home={data} now={now} />
         </div>
       </div>
 
       {/* 오른쪽 카드 열: 스크롤을 따라오고, 화면 높이를 채운다 */}
       <aside
-        aria-label="관심 종목과 일정"
+        aria-label="해설, 관심 종목, 일정"
         className="max-lg:contents lg:sticky lg:top-5 lg:flex lg:h-[calc(100dvh-40px)] lg:flex-col lg:gap-5 lg:overflow-y-auto"
       >
-        <div className={`${CARD} max-lg:order-4`}>
-          <AiSignalCard ai={ai.data} failed={ai.isError} />
+        <div className={`${CARD} max-lg:order-2`}>
+          <CommentaryCard weather={weather} />
         </div>
-        <div className={`${CARD} max-lg:order-4 lg:flex-1`}>
+        <div className={`${CARD} max-lg:order-7 lg:flex-1`}>
           <WatchCard my={my.data} failed={my.isError} onInfo={setInfo} />
         </div>
-        <div className={`${CARD} max-lg:order-5`}>
+        <div className={`${CARD} max-lg:order-8`}>
           <ScheduleCard earnings={data.earnings} now={now} />
         </div>
       </aside>

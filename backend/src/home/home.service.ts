@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Market } from '../generated/prisma/client.js';
-import { lookupMembers } from '../jobs/congress-members.js';
+import { congressFlows } from '../jobs/congress-members.js';
 import { MARKET_DAILY } from '../jobs/market-daily.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MARKET_DAILY_SLOT } from '../scheduler/scheduler.service.js';
@@ -38,7 +38,10 @@ export class HomeService {
     return { market, weather, history, sectors, sectorHistory, run, earnings, intel, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
   }
 
-  /** 내 보유·관심 종목의 중요한 새 소식(3일)과 의원 거래 신고(신고일 30일) */
+  /**
+   * 내 보유·관심 종목의 중요한 새 소식(3일)과 의원 거래 쏠림(신고일 30일).
+   * 의원 거래는 신고가 늦어 한 건씩은 홈에 두지 않는다. 서로 다른 의원 여럿이 한쪽으로 몰릴 때만 알린다.
+   */
   private async intel() {
     const [h, w] = await Promise.all([
       this.prisma.holding.findMany({ select: { symbol: true } }),
@@ -48,7 +51,7 @@ export class HomeService {
     for (const x of w) kind.set(x.symbol, 'watch');
     for (const x of h) kind.set(x.symbol, 'holding');
     const symbols = [...kind.keys()];
-    if (!symbols.length) return { news: [], congress: [] };
+    if (!symbols.length) return { news: [], congressFlows: [] };
     const since = (days: number) => new Date(Date.now() - days * 86_400_000);
     const [news, trades, names] = await Promise.all([
       this.prisma.newsItem.findMany({
@@ -58,13 +61,10 @@ export class HomeService {
       }),
       this.prisma.congressTrade.findMany({
         where: { ticker: { in: symbols }, doc: { filed: { gte: since(30) } } },
-        include: { doc: { select: { member: true, filed: true, district: true } } },
-        orderBy: { doc: { filed: 'desc' } },
-        take: 10,
+        include: { doc: { select: { member: true } } },
       }),
       this.prisma.symbol.findMany({ where: { symbol: { in: symbols } }, select: { symbol: true, nameEn: true, nameKo: true } }),
     ]);
-    const members = await lookupMembers(this.prisma, trades.map((t) => t.doc.district));
     const nameOf = new Map(names.map((n) => [n.symbol, n]));
     const name = (s: string) => ({ nameEn: nameOf.get(s)?.nameEn ?? s, nameKo: nameOf.get(s)?.nameKo ?? null });
     return {
@@ -78,16 +78,10 @@ export class HomeService {
         url: n.url,
         publishedAt: n.publishedAt.toISOString(),
       })),
-      congress: trades.map((t) => ({
-        symbol: t.ticker!,
-        ...name(t.ticker!),
-        tracked: kind.get(t.ticker!)!,
-        member: t.doc.member.replace(/^Hon\.\s*/, ''),
-        memberInfo: (t.doc.district && members.get(t.doc.district)) ?? null,
-        type: t.type,
-        amount: t.amount,
-        tradeDate: t.tradeDate ? day(t.tradeDate) : null,
-        filed: day(t.doc.filed),
+      congressFlows: congressFlows(trades.map((t) => ({ symbol: t.ticker!, member: t.doc.member, type: t.type }))).map((f) => ({
+        ...f,
+        ...name(f.symbol),
+        tracked: kind.get(f.symbol)!,
       })),
     };
   }

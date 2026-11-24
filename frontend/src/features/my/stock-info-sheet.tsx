@@ -165,8 +165,17 @@ function Earnings({ data }: { data: StockIntel }) {
 
 function Congress({ data }: { data: StockIntel }) {
   if (!data.congress.length) return <Empty>최근 120일 동안 이 종목에 대한 미국 하원 의원 거래 신고가 없어요.</Empty>;
+  // 거래 수가 아니라 사람 수로 센다. 3명 이상이 한쪽이고 반대쪽이 1명 이하면 쏠림 (홈 오늘 할 일과 같은 기준)
+  const buyers = new Set(data.congress.filter((c) => c.type === "P").map((c) => c.member)).size;
+  const sellers = new Set(data.congress.filter((c) => c.type.startsWith("S")).map((c) => c.member)).size;
+  const people = new Set(data.congress.map((c) => c.member)).size;
+  const lean =
+    buyers >= 3 && sellers <= 1 ? "산 쪽으로 몰렸어요" : sellers >= 3 && buyers <= 1 ? "판 쪽으로 몰렸어요" : "뚜렷한 방향은 없어요";
   return (
     <>
+      <p className="mb-2 rounded-lg bg-surface px-3 py-2 text-[14px] leading-[1.5]">
+        최근 120일 의원 {people}명이 신고했어요. 산 사람 {buyers}명, 판 사람 {sellers}명, {lean}.
+      </p>
       <ul className="-mx-2">
         {data.congress.map((c, i) => (
           <li key={`${c.member}-${c.tradeDate}-${i}`} className="flex items-center gap-3 border-b border-border px-2 py-2.5 last:border-b-0">
