@@ -1,6 +1,6 @@
 "use client";
 
-import type { AiDuelResponse, AiScore } from "@atlas/contracts";
+import type { AiAccountView, AiDuelResponse, AiRuleVersion, AiScore } from "@atlas/contracts";
 import { Play, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -14,10 +14,22 @@ import { DuelChart } from "./duel-chart";
 import { SignalTabs } from "./signal-tabs";
 import { useAiDuel, useRunAi, useStartAiAccount } from "./use-ai";
 
-const EXIT_KO: Record<string, string> = { stop: "손절가", target: "목표가", ma50: "50일선 이탈", time: "시간 손절" };
+const EXIT_KO: Record<string, string> = {
+  stop: "손절가",
+  target: "목표가",
+  ma50: "50일선 이탈",
+  time: "시간 손절",
+  ema21: "21일 지수선 이탈",
+};
+
+/** 규칙 버전 한 줄 설명 (자세한 규칙은 docs/ai-duel.md) */
+const VERSION_NOTE: Record<AiRuleVersion, string> = {
+  v1: "20일 신고가·깃발형 + 50일선 위 + 거래량 1.2배. 손절 ATR×2, 목표 +2R에서 정리",
+  v2: "v1 + 이동평균 정배열·52주 고점 근처·S&P 500보다 강함·거래량 1.5배, 갭 3% 넘으면 추격 안 함. 손절 최대 −8%, +1R 뒤 본전 보호, 목표 없이 21일선 이탈에 정리, 최대 6종목",
+};
 const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}%`);
 
-/** AI 대결: AI 모의 계좌(추세 추종 스윙 v1) vs 내 매매 기록. 신호는 참고용, 선택과 주문은 사용자 */
+/** AI 대결: AI 모의 계좌 두 개(v1 추세 추종, v2 원칙 강화) vs 내 매매 기록. 신호는 참고용, 선택과 주문은 사용자 */
 export function AiScreen() {
   const { data, isPending, isError, refetch } = useAiDuel();
   const [startOpen, setStartOpen] = useState(false);
@@ -31,12 +43,12 @@ export function AiScreen() {
           <div className="max-w-2xl">
             <h1 className="text-[24px] font-semibold tracking-[-0.02em]">AI 대결</h1>
             <p className="mt-1 text-[14px] leading-[1.55] text-text-secondary">
-              AI가 &ldquo;추세 추종 스윙&rdquo; 규칙으로 모의 계좌를 굴려요. 매일 차트 스캐너가 셋업을 찾고, 시장 판정과 종목 조건을
-              통과하면 다음 거래일 시가에 사서 손절가·목표가·50일선 규칙대로 팝니다. 실제 주문은 하지 않아요. 나는 &ldquo;기록&rdquo;에
+              규칙이 다른 AI 두 개가 같은 자금으로 모의 계좌를 굴려요. 매일 차트 스캐너가 찾은 같은 셋업을 각자 자기 규칙으로
+              판단하고, 통과하면 다음 거래일 시가에 사서 규칙대로 팝니다. 실제 주문은 하지 않아요. 나는 &ldquo;기록&rdquo;에
               샀음·팔았음을 남기면 같은 기준으로 성적이 매겨져요.
             </p>
           </div>
-          {data?.account && (
+          {!!data?.accounts.length && (
             <div className="flex gap-2">
               <button
                 type="button"
@@ -76,11 +88,11 @@ export function AiScreen() {
             다시 시도
           </button>
         </div>
-      ) : !data.account ? (
+      ) : !data.accounts.length ? (
         <div className={CARD}>
           <SectionTitle id="start-title">AI 계좌 열기</SectionTitle>
           <p className="mt-2 text-[15px] leading-[1.5] text-text-secondary">
-            AI에게 줄 시작 자금을 정하면 대결이 시작돼요. 내 총 투자금과 같게 두면 비교가 공정해요.
+            AI v1·v2에게 같은 시작 자금을 주면 대결이 시작돼요. 내 총 투자금과 같게 두면 비교가 공정해요.
           </p>
           <button
             type="button"
@@ -94,94 +106,24 @@ export function AiScreen() {
         <Duel data={data} />
       )}
 
-      <StartSheet open={startOpen} onClose={() => setStartOpen(false)} defaultCapital={data?.capital ?? null} replacing={!!data?.account} />
+      <StartSheet open={startOpen} onClose={() => setStartOpen(false)} defaultCapital={data?.capital ?? null} replacing={!!data?.accounts.length} />
     </div>
   );
 }
 
 function Duel({ data }: { data: AiDuelResponse }) {
-  const score = data.score!;
+  // 모바일은 좁아서 버전 하나씩 전환해 본다. 데스크톱은 v1 | v2를 나란히
+  const [version, setVersion] = useState<AiRuleVersion>("v2");
 
   return (
-    <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-5 lg:space-y-0">
-      <div className="space-y-4 lg:space-y-5">
-        {/* 신호 */}
-        <section aria-labelledby="signals-title" className={CARD}>
-          <SectionTitle id="signals-title" aside="눌러서 판단·계획 보기">
-            AI 신호
-          </SectionTitle>
-          {data.signals.length === 0 ? (
-            <p className="mt-3 text-[15px] leading-[1.5] text-text-secondary">
-              아직 신호가 없어요. &ldquo;지금 실행&rdquo;을 누르거나, 화~토 오후 1시 30분 자동 실행을 기다려 주세요.
-            </p>
-          ) : (
-            <SignalTabs signals={data.signals} />
-          )}
-        </section>
-
-        {/* AI 보유·지난 거래 */}
-        <section aria-labelledby="ai-pos-title" className={CARD}>
-          <SectionTitle id="ai-pos-title" aside={`현금 ${usd(data.account!.cash)}`}>
-            AI 보유 종목
-          </SectionTitle>
-          {data.positions.length === 0 ? (
-            <p className="mt-3 text-[15px] text-text-secondary">지금 AI가 들고 있는 종목은 없어요.</p>
-          ) : (
-            <ul className="mt-2 -mx-2">
-              {data.positions.map((p) => {
-                const c = changeText(p.pnlPct);
-                return (
-                  <li key={p.id} className="flex items-center gap-3 border-b border-border px-2 py-3 last:border-b-0">
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline gap-2">
-                        <span className="text-[16px] font-semibold">{p.symbol}</span>
-                        <span className="truncate text-[14px] text-text-secondary">{displayName(p)}</span>
-                      </span>
-                      <span className="mt-0.5 block text-[13px] text-text-muted tabular-nums">
-                        {p.entryDate} {usd(p.entryPrice)}에 {p.shares}주, 손절 {usd(p.stopPrice)}, 목표 {usd(p.targetPrice)}
-                        {p.pendingExit && <span className="text-primary-hover">, 다음 시가 매도 예정({EXIT_KO[p.pendingExit]})</span>}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-right text-[15px] tabular-nums">
-                      {p.lastClose != null ? usd(p.lastClose) : "—"}
-                      {c && <span className={`block text-[12px] ${c.tone}`}>{c.text}</span>}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {data.closed.length > 0 && (
-            <>
-              <p className="mt-5 text-[13px] text-text-muted">지난 거래</p>
-              <ul className="mt-1 -mx-2">
-                {data.closed.map((p) => {
-                  const c = changeText(p.pnlPct);
-                  return (
-                    <li key={p.id} className="flex items-center gap-3 border-b border-border px-2 py-2.5 text-[14px] last:border-b-0">
-                      <span className="w-14 shrink-0 font-semibold">{p.symbol}</span>
-                      <span className="min-w-0 flex-1 text-text-secondary tabular-nums">
-                        {p.entryDate} → {p.exitDate}, {p.exitReason ? EXIT_KO[p.exitReason] : ""}
-                      </span>
-                      <span className={`shrink-0 tabular-nums ${c?.tone ?? ""}`}>
-                        {c?.text} {p.pnl != null && `(${p.pnl >= 0 ? "+" : "−"}${usd(Math.abs(p.pnl))})`}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </section>
-      </div>
-
-      {/* 오른쪽: 성적 */}
-      <div className="space-y-4 lg:sticky lg:top-5 lg:space-y-5">
+    <div className="space-y-4 lg:space-y-5">
+      {/* 위: 성적과 수익률 곡선 */}
+      <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-5 lg:space-y-0">
         <section aria-labelledby="score-title" className={CARD}>
-          <SectionTitle id="score-title" aside={score.benchmarkPct != null ? `S&P 500 ${pct(score.benchmarkPct)}` : undefined}>
+          <SectionTitle id="score-title" aside={data.benchmarkPct != null ? `S&P 500 ${pct(data.benchmarkPct)}` : undefined}>
             성적
           </SectionTitle>
-          <Scoreboard ai={score.ai} me={score.me} capital={data.capital} />
+          <Scoreboard accounts={data.accounts} me={data.me} capital={data.capital} />
         </section>
         <section aria-labelledby="curve-title" className={CARD}>
           <SectionTitle id="curve-title">수익률 곡선</SectionTitle>
@@ -190,11 +132,126 @@ function Duel({ data }: { data: AiDuelResponse }) {
           </div>
         </section>
       </div>
+
+      {/* 모바일: 버전 전환 */}
+      <div role="radiogroup" aria-label="규칙 버전" className="flex w-fit rounded-full border border-border bg-surface-raised p-0.5 lg:hidden">
+        {data.accounts.map((a) => (
+          <button
+            key={a.version}
+            type="button"
+            role="radio"
+            aria-checked={version === a.version}
+            onClick={() => setVersion(a.version)}
+            className={`pressable min-h-10 rounded-full px-4 text-[14px] font-medium ${
+              version === a.version ? "bg-text text-white" : "text-text-secondary"
+            }`}
+          >
+            {a.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 아래: 버전별 거래와 신호. 데스크톱은 반반 */}
+      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-5">
+        {data.accounts.map((a) => (
+          <div key={a.version} className={`space-y-4 lg:space-y-5 ${a.version === version ? "" : "max-lg:hidden"}`}>
+            {/* 거래(보유·지난 거래)를 위에 둬야 v1·v2 줄이 맞는다. 신호는 길이가 들쭉날쭉하다 */}
+            <Positions view={a} />
+            <VersionSignals view={a} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function Scoreboard({ ai, me, capital }: { ai: AiScore; me: AiScore | null; capital: number | null }) {
+/** 한 버전의 신호 카드: 제목(버전 색), 규칙 한 줄, 매수·매도·관찰 탭 */
+function VersionSignals({ view }: { view: AiAccountView }) {
+  const tone = view.version === "v1" ? "bg-primary" : "bg-sector-healthcare";
+  return (
+    <section aria-labelledby={`signals-${view.version}`} className={CARD}>
+      <div className="flex items-center gap-2">
+        <span className={`size-2.5 shrink-0 rounded-full ${tone}`} aria-hidden />
+        <SectionTitle id={`signals-${view.version}`}>{view.label}</SectionTitle>
+      </div>
+      <p className="mt-1.5 text-[13px] leading-[1.5] text-text-muted">{VERSION_NOTE[view.version]}</p>
+      {view.signals.length === 0 ? (
+        <p className="mt-3 text-[15px] leading-[1.5] text-text-secondary">
+          아직 신호가 없어요. &ldquo;지금 실행&rdquo;을 누르거나, 화~토 오후 1시 30분 자동 실행을 기다려 주세요.
+        </p>
+      ) : (
+        <SignalTabs key={view.version} signals={view.signals} />
+      )}
+    </section>
+  );
+}
+
+/** 선택한 버전의 AI 보유 종목과 지난 거래 */
+function Positions({ view }: { view: AiAccountView }) {
+  return (
+    <section aria-labelledby={`ai-pos-${view.version}`} className={CARD}>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className={`size-2.5 shrink-0 rounded-full ${view.version === "v1" ? "bg-primary" : "bg-sector-healthcare"}`} aria-hidden />
+          <SectionTitle id={`ai-pos-${view.version}`}>{view.label} 거래</SectionTitle>
+        </div>
+        <span className="shrink-0 text-[13px] text-text-muted tabular-nums">현금 {usd(view.account.cash)}</span>
+      </div>
+      {view.positions.length === 0 ? (
+        <p className="mt-3 text-[15px] text-text-secondary">지금 들고 있는 종목은 없어요. 산 종목과 판 기록이 여기에 쌓여요.</p>
+      ) : (
+        <ul className="mt-2 -mx-2">
+          {view.positions.map((p) => {
+            const c = changeText(p.pnlPct);
+            return (
+              <li key={p.id} className="flex items-center gap-3 border-b border-border px-2 py-3 last:border-b-0">
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <span className="text-[16px] font-semibold">{p.symbol}</span>
+                    <span className="truncate text-[14px] text-text-secondary">{displayName(p)}</span>
+                  </span>
+                  <span className="mt-0.5 block text-[13px] text-text-muted tabular-nums">
+                    {p.entryDate} {usd(p.entryPrice)}에 {p.shares}주, 손절 {usd(p.stopPrice)}
+                    {p.breakeven && " (본전 보호)"}
+                    {p.targetPrice != null && `, 목표 ${usd(p.targetPrice)}`}
+                    {p.pendingExit && <span className="text-primary-hover">, 다음 시가 매도 예정({EXIT_KO[p.pendingExit]})</span>}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right text-[15px] tabular-nums">
+                  {p.lastClose != null ? usd(p.lastClose) : "—"}
+                  {c && <span className={`block text-[12px] ${c.tone}`}>{c.text}</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {view.closed.length > 0 && (
+        <>
+          <p className="mt-5 text-[13px] text-text-muted">지난 거래</p>
+          <ul className="mt-1 -mx-2">
+            {view.closed.map((p) => {
+              const c = changeText(p.pnlPct);
+              return (
+                <li key={p.id} className="flex items-center gap-3 border-b border-border px-2 py-2.5 text-[14px] last:border-b-0">
+                  <span className="w-14 shrink-0 font-semibold">{p.symbol}</span>
+                  <span className="min-w-0 flex-1 text-text-secondary tabular-nums">
+                    {p.entryDate} → {p.exitDate}, {p.exitReason ? EXIT_KO[p.exitReason] : ""}
+                  </span>
+                  <span className={`shrink-0 tabular-nums ${c?.tone ?? ""}`}>
+                    {c?.text} {p.pnl != null && `(${p.pnl >= 0 ? "+" : "−"}${usd(Math.abs(p.pnl))})`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+function Scoreboard({ accounts, me, capital }: { accounts: AiAccountView[]; me: AiScore | null; capital: number | null }) {
   const rows: { label: string; get: (s: AiScore) => string }[] = [
     { label: "수익률", get: (s) => pct(s.returnPct) },
     { label: "계좌 가치", get: (s) => usd(s.equity) },
@@ -204,29 +261,38 @@ function Scoreboard({ ai, me, capital }: { ai: AiScore; me: AiScore | null; capi
     { label: "최대 낙폭", get: (s) => (s.maxDrawdownPct == null ? "—" : `${s.maxDrawdownPct.toFixed(1)}%`) },
     { label: "보유 종목", get: (s) => `${s.openPositions}개` },
   ];
+  const head = (v: string) => (v === "v1" ? "text-primary" : "text-sector-healthcare");
   return (
     <>
       <table className="mt-3 w-full text-[14px] tabular-nums">
         <thead>
           <tr className="text-[12px] text-text-muted">
             <th className="py-1.5 text-left font-normal" />
-            <th className="py-1.5 text-right font-medium text-primary">AI</th>
-            <th className="py-1.5 text-right font-medium text-text">나</th>
+            {accounts.map((a) => (
+              <th key={a.version} className={`py-1.5 text-right font-semibold ${head(a.version)}`}>
+                AI {a.version}
+              </th>
+            ))}
+            <th className="py-1.5 text-right font-semibold text-text">나</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.label} className="border-t border-border">
               <td className="py-2 text-text-secondary">{r.label}</td>
-              <td className="py-2 text-right">{r.get(ai)}</td>
+              {accounts.map((a) => (
+                <td key={a.version} className="py-2 text-right">
+                  {r.get(a.score)}
+                </td>
+              ))}
               <td className="py-2 text-right">{me ? r.get(me) : "—"}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {!me && (
+      {!me && capital == null && (
         <p className="mt-3 text-[13px] leading-[1.5] text-text-muted">
-          {capital == null ? "총 투자금을 넣으면 내 성적도 같이 잴 수 있어요. 홈 맨 위 “총 투자금 넣기”에서 넣어 주세요." : ""}
+          총 투자금을 넣으면 내 성적도 같이 잴 수 있어요. 홈 맨 위 &ldquo;총 투자금 넣기&rdquo;에서 넣어 주세요.
         </p>
       )}
       <p className="mt-3 text-[13px] leading-[1.5] text-text-muted">
@@ -234,7 +300,7 @@ function Scoreboard({ ai, me, capital }: { ai: AiScore; me: AiScore | null; capi
         <Link href="/records" className="text-primary">
           기록
         </Link>
-        의 샀음·팔았음과 보유 종목 종가로 계산해요. AI 계좌 시작일부터 비교해요.
+        의 샀음·팔았음과 보유 종목 종가로 계산해요. 끝난 거래가 30번쯤 쌓여야 규칙끼리 비교가 의미 있어요.
       </p>
     </>
   );
@@ -252,7 +318,7 @@ function StartSheet({
   replacing: boolean;
 }) {
   return (
-    <Sheet open={open} onClose={onClose} title={replacing ? "AI 새로 시작" : "AI 시작 자금"}>
+    <Sheet open={open} onClose={onClose} title={replacing ? "AI v1·v2 새로 시작" : "AI 시작 자금"}>
       {open && <StartForm onDone={onClose} defaultCapital={defaultCapital} replacing={replacing} />}
     </Sheet>
   );
@@ -274,7 +340,7 @@ function StartForm({ onDone, defaultCapital, replacing }: { onDone: () => void; 
     >
       {replacing && (
         <p className="rounded-xl bg-primary-tint/50 px-4 py-3 text-[14px] leading-[1.5]">
-          지금 AI 계좌를 끝내고 새 계좌로 다시 시작해요. 지난 신호와 거래는 이번 대결에서 빠져요.
+          지금 AI v1·v2 계좌를 끝내고 같은 금액으로 둘 다 다시 시작해요. 지난 신호와 거래는 이번 대결에서 빠져요.
         </p>
       )}
       <label className="block text-[13px] text-text-secondary">

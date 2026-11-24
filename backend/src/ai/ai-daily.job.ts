@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client.js';
+import type { AiAccount, Prisma } from '../generated/prisma/client.js';
 import { repoRoot } from '../common/paths.js';
 import { PricesService } from '../jobs/prices.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -13,15 +13,15 @@ import {
   evaluateBuy,
   evaluateHolding,
   RULES,
-  SETUP_LABEL,
   sizePosition,
   sma,
   stepPosition,
 } from './strategy.js';
+import { ema, evaluateBuyV2, riskPctV2, RULES_V2, sizePositionV2, stepPositionV2 } from './strategy-v2.js';
 
 export const AI_DAILY = 'ai_daily';
 
-/** 스캐너 결과 중 일봉을 받아 판단할 종목 수 (거래대금 큰 순) */
+/** 스캐너 결과 중 일봉을 받아 판단할 종목 수 */
 const MAX_CANDIDATES = 30;
 /** 벤치마크 */
 export const BENCHMARK = 'SPY';
@@ -29,6 +29,7 @@ const PLAIN_TICKER = /^[A-Z]{1,5}(\.[A-Z])?$/;
 /** 변동성 상품(ETN)은 주식이 아니라 추세 추종 대상에서 뺀다 */
 const NOT_STOCK = /\b(ETN|iPath|Exchange Traded Notes?|VIX)\b/i;
 const TREND_SETUPS = new Set(['breakout_20d', 'bull_flag']);
+const DAY_MS = 86_400_000;
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 const toDate = (s: string) => new Date(`${s}T00:00:00Z`);
@@ -43,9 +44,9 @@ interface ScanHit {
 }
 
 /**
- * AI 모의 계좌 하루 처리 (docs/ai-duel.md). 순서:
- * 1) 어제 낸 매수 신호를 오늘 시가에 체결  2) 보유 포지션 손절·목표·종가 규칙  3) 계좌 가치 기록
- * 4) 스캐너로 새 셋업 찾기 → 규칙으로 판단·계획  5) 내 보유 종목을 같은 규칙으로 본 매도 신호  6) 내 계좌 가치 기록
+ * AI 모의 계좌 하루 처리 (docs/ai-duel.md). 규칙 버전(v1, v2)마다 계좌가 따로 있고 같은 스캔 결과를 쓴다.
+ * 계좌마다: 1) 어제 낸 매수 신호를 오늘 시가에 체결  2) 새 봉으로 손절·청산  3) 계좌 가치
+ * 공통: 4) 스캐너로 셋업 찾기 → 계좌마다 자기 규칙으로 판단·계획  5) 내 보유 종목 매도 신호  6) 내 계좌 가치
  * 실패한 단계는 건너뛰고 나머지를 계속한다 (절대 규칙 4).
  */
 @Injectable()
@@ -70,30 +71,36 @@ export class AiDailyJob {
     const run = await this.prisma.run.create({ data: { kind: AI_DAILY, market: 'us' } });
     const notes: string[] = [];
     try {
-      const account = await this.prisma.aiAccount.findFirst({ where: { active: true } });
+      const accounts = await this.prisma.aiAccount.findMany({ where: { active: true }, orderBy: { ruleVersion: 'asc' } });
       const weather = await this.prisma.marketSnapshot.findFirst({
         where: { market: 'us', condition: { not: null } },
         orderBy: { tradeDate: 'desc' },
       });
       const condition = (weather?.condition ?? null) as Condition | null;
 
-      if (account) {
-        // 1~3) 체결·청산·계좌 가치
-        const open = await this.prisma.aiPosition.findMany({ where: { accountId: account.id, status: 'open' } });
-        const planned = await this.prisma.aiSignal.findMany({ where: { accountId: account.id, status: 'planned' } });
-        await this.prices.refresh([...new Set([...open, ...planned].map((x) => x.symbol).concat(BENCHMARK))]);
-        await this.fill(account.id);
-        await this.manage(account.id);
-        await this.snapshot(account.id);
-      } else {
-        notes.push('AI 계좌가 없어 체결·신호를 건너뜀');
+      if (!accounts.length) notes.push('AI 계좌가 없어 체결·신호를 건너뜀');
+
+      // 1~3) 계좌마다 체결·청산·계좌 가치
+      const symbols = new Set<string>([BENCHMARK]);
+      for (const a of accounts) {
+        const [open, planned] = await Promise.all([
+          this.prisma.aiPosition.findMany({ where: { accountId: a.id, status: 'open' }, select: { symbol: true } }),
+          this.prisma.aiSignal.findMany({ where: { accountId: a.id, status: 'planned' }, select: { symbol: true } }),
+        ]);
+        for (const x of [...open, ...planned]) symbols.add(x.symbol);
+      }
+      await this.prices.refresh([...symbols]);
+      for (const a of accounts) {
+        await this.fill(a);
+        await this.manage(a);
+        await this.snapshot(a.id);
       }
 
-      // 4) 새 셋업
-      if (account) {
+      // 4) 새 셋업 (스캔은 한 번, 판단은 계좌마다)
+      if (accounts.length) {
         try {
-          const found = await this.scan(run.id, account.id, condition, weather?.exposureCeiling ?? null);
-          notes.push(`셋업 ${found}개 판단`);
+          const found = await this.scan(run.id, accounts, condition, weather?.exposureCeiling ?? null);
+          notes.push(`셋업 ${found}개 판단 (${accounts.map((a) => a.ruleVersion).join(', ')})`);
         } catch (err) {
           notes.push(`스캔 실패: ${String(err)}`);
           this.logger.warn(`스캔 실패: ${String(err)}`);
@@ -101,7 +108,7 @@ export class AiDailyJob {
       }
 
       // 5) 내 종목 매도 신호, 6) 내 계좌 가치
-      if (account) await this.myHoldingSignals(account.id);
+      for (const a of accounts) await this.myHoldingSignals(a);
       await this.mySnapshot();
 
       await this.prisma.run.update({
@@ -119,43 +126,45 @@ export class AiDailyJob {
     }
   }
 
-  /** 계획된 매수 신호를 신호 다음 거래일 시가에 체결한다 */
-  private async fill(accountId: string) {
+  /** 계획된 매수 신호를 신호 다음 거래일 시가에 체결한다. v2는 3% 넘는 갭 상승을 추격하지 않는다 */
+  private async fill(account: AiAccount) {
     const planned = await this.prisma.aiSignal.findMany({
-      where: { accountId, status: 'planned' },
+      where: { accountId: account.id, status: 'planned' },
       orderBy: { date: 'asc' },
     });
     for (const s of planned) {
       const bars = await this.bars(s.symbol);
       const next = bars.find((b) => b.date > day(s.date));
       if (!next) continue; // 아직 다음 날 봉이 없다
-      const account = await this.prisma.aiAccount.findUniqueOrThrow({ where: { id: accountId } });
-      const shares = Math.min(s.shares ?? 0, Math.floor(account.cash / next.open));
-      if (shares <= 0 || s.stopPrice == null || s.targetPrice == null || next.open <= s.stopPrice) {
-        await this.prisma.aiSignal.update({
-          where: { id: s.id },
-          data: {
-            status: 'skipped',
-            note: next.open <= (s.stopPrice ?? 0) ? `시가 $${next.open.toFixed(2)}가 이미 손절가 아래라 사지 않음` : '현금이 모자라 사지 않음',
-          },
-        });
+      const { cash } = await this.prisma.aiAccount.findUniqueOrThrow({ where: { id: account.id } });
+      const shares = Math.min(s.shares ?? 0, Math.floor(cash / next.open));
+
+      let skip: string | null = null;
+      if (s.stopPrice == null || next.open <= s.stopPrice) skip = `시가 $${next.open.toFixed(2)}가 이미 손절가 아래라 사지 않음`;
+      else if (account.ruleVersion === 'v2' && next.open > s.closePrice * (1 + RULES_V2.maxGapPct)) {
+        skip = `시가 $${next.open.toFixed(2)}가 신호 종가보다 ${((next.open / s.closePrice - 1) * 100).toFixed(1)}% 높아 추격하지 않음`;
+      } else if (account.ruleVersion === 'v1' && s.targetPrice == null) skip = '목표가가 없어 사지 않음';
+      else if (shares <= 0) skip = '현금이 모자라 사지 않음';
+      if (skip) {
+        await this.prisma.aiSignal.update({ where: { id: s.id }, data: { status: 'skipped', note: skip } });
         continue;
       }
+
       const position = await this.prisma.aiPosition.create({
         data: {
-          accountId,
+          accountId: account.id,
           signalId: s.id,
           symbol: s.symbol,
           shares,
           entryDate: toDate(next.date),
           entryPrice: next.open,
-          stopPrice: s.stopPrice,
+          stopPrice: s.stopPrice!,
           targetPrice: s.targetPrice,
           status: 'open',
         },
       });
       await this.prisma.$transaction([
-        this.prisma.aiAccount.update({ where: { id: accountId }, data: { cash: { decrement: shares * next.open } } }),
+        this.prisma.aiAccount.update({ where: { id: account.id }, data: { cash: { decrement: shares * next.open } } }),
         this.prisma.aiSignal.update({
           where: { id: s.id },
           data: { status: 'filled', positionId: position.id, note: `${next.date} 시가 $${next.open.toFixed(2)}에 ${shares}주 체결` },
@@ -164,51 +173,78 @@ export class AiDailyJob {
     }
   }
 
-  /** 보유 포지션에 체결일부터 새 봉을 하나씩 적용한다 */
-  private async manage(accountId: string) {
-    const positions = await this.prisma.aiPosition.findMany({ where: { accountId, status: 'open' } });
+  /**
+   * 보유 포지션에 아직 처리하지 않은 봉(마지막 처리일 다음부터)을 하나씩 적용한다.
+   * 새로 체결된 포지션은 체결일 봉부터. 같은 봉을 두 번 적용하지 않아 v2의 본전 보호 상태가 유지된다.
+   */
+  private async manage(account: AiAccount) {
+    const positions = await this.prisma.aiPosition.findMany({ where: { accountId: account.id, status: 'open' } });
+    const processed = account.lastProcessedDate ? day(account.lastProcessedDate) : '';
     for (const p of positions) {
       const bars = await this.bars(p.symbol);
-      const entry = day(p.entryDate);
-      const startIdx = bars.findIndex((b) => b.date >= entry);
-      if (startIdx < 0) continue;
+      const entryIdx = bars.findIndex((b) => b.date >= day(p.entryDate));
+      if (entryIdx < 0) continue;
+      let stop = p.stopPrice;
+      let breakeven = p.breakeven;
       let pending = p.pendingExit;
-      for (let i = startIdx; i < bars.length; i++) {
+
+      for (let i = entryIdx; i < bars.length; i++) {
         const bar = bars[i];
-        // 체결일의 시가 이전 규칙(대기 청산)은 체결일에 적용하지 않는다
-        const ma50 = sma(bars.slice(0, i + 1).map((b) => b.close), 50);
-        const step = stepPosition(
-          { entryPrice: p.entryPrice, stopPrice: p.stopPrice, targetPrice: p.targetPrice, pendingExit: i === startIdx ? null : pending },
-          bar,
-          ma50,
-          i - startIdx,
-        );
+        // 이미 처리한 봉은 건너뛴다. 새로 체결된 포지션의 체결일은 늘 마지막 처리일 뒤라 여기서 걸리지 않는다
+        if (bar.date <= processed) continue;
+        const closes = bars.slice(0, i + 1).map((b) => b.close);
+        const barsHeld = i - entryIdx;
+        // 체결일에는 전날 정한 대기 청산이 있을 수 없다
+        const pend = i === entryIdx ? null : pending;
+
+        const step =
+          account.ruleVersion === 'v2'
+            ? stepPositionV2(
+                // 본전 보호 전에는 손절가가 처음 정한 값 그대로라 1R 계산에 그대로 쓴다 (보호 뒤에는 1R을 보지 않는다)
+                { entryPrice: p.entryPrice, stopPrice: stop, initialStop: stop, breakeven, pendingExit: pend },
+                bar,
+                { ma50: sma(closes, 50), ema21: ema(closes, RULES_V2.emaPeriod) },
+                barsHeld,
+              )
+            : stepPosition(
+                { entryPrice: p.entryPrice, stopPrice: stop, targetPrice: p.targetPrice ?? Number.POSITIVE_INFINITY, pendingExit: pend },
+                bar,
+                sma(closes, 50),
+                barsHeld,
+              );
+
         if (step.kind === 'exit') {
           const pnl = (step.price - p.entryPrice) * p.shares;
           await this.prisma.$transaction([
             this.prisma.aiPosition.update({
               where: { id: p.id },
-              data: { status: 'closed', exitDate: toDate(bar.date), exitPrice: step.price, exitReason: step.reason, pnl, pendingExit: null },
+              data: { status: 'closed', exitDate: toDate(bar.date), exitPrice: step.price, exitReason: step.reason, pnl, pendingExit: null, stopPrice: stop, breakeven },
             }),
-            this.prisma.aiAccount.update({ where: { id: accountId }, data: { cash: { increment: step.price * p.shares } } }),
+            this.prisma.aiAccount.update({ where: { id: account.id }, data: { cash: { increment: step.price * p.shares } } }),
           ]);
           pending = null;
           break;
         }
+        if (step.kind === 'breakeven') {
+          stop = step.stop;
+          breakeven = true;
+          pending = null;
+          continue;
+        }
         pending = step.kind === 'pending' ? step.reason : null;
       }
-      if (pending !== p.pendingExit) {
-        await this.prisma.aiPosition.updateMany({ where: { id: p.id, status: 'open' }, data: { pendingExit: pending } });
-      }
+      await this.prisma.aiPosition.updateMany({
+        where: { id: p.id, status: 'open' },
+        data: { pendingExit: pending, stopPrice: stop, breakeven },
+      });
     }
   }
 
-  /** 마지막 종가 기준 AI 계좌 가치 */
+  /** 마지막 종가 기준 AI 계좌 가치. 처리한 날짜도 여기서 앞으로 민다 */
   private async snapshot(accountId: string) {
     const account = await this.prisma.aiAccount.findUniqueOrThrow({ where: { id: accountId } });
     const positions = await this.prisma.aiPosition.findMany({ where: { accountId, status: 'open' } });
-    const spy = await this.bars(BENCHMARK);
-    const date = spy.at(-1)?.date;
+    const date = (await this.bars(BENCHMARK)).at(-1)?.date;
     if (!date) return;
     let positionsValue = 0;
     for (const p of positions) {
@@ -224,8 +260,8 @@ export class AiDailyJob {
     await this.prisma.aiAccount.update({ where: { id: accountId }, data: { lastProcessedDate: toDate(date) } });
   }
 
-  /** trader-scanner로 셋업을 찾고, 거래대금 큰 순으로 판단한다 */
-  private async scan(runId: string, accountId: string, condition: Condition | null, ceiling: number | null) {
+  /** trader-scanner로 셋업을 찾고(한 번), 계좌마다 자기 규칙으로 판단한다 */
+  private async scan(runId: string, accounts: AiAccount[], condition: Condition | null, ceiling: number | null) {
     const symbols = await this.prisma.symbol.findMany({ where: { type: 'stock' }, select: { symbol: true, nameEn: true } });
     const dir = join(repoRoot(), 'reports', runId, 'trader-scanner');
     await mkdir(dir, { recursive: true });
@@ -249,17 +285,53 @@ export class AiDailyJob {
       .slice(0, MAX_CANDIDATES);
     await this.prices.refresh(ranked.map((h) => h.symbol));
 
-    const account = await this.prisma.aiAccount.findUniqueOrThrow({ where: { id: accountId } });
-    const latestEquity = await this.prisma.aiEquity.findFirst({ where: { accountId }, orderBy: { date: 'desc' } });
-    const equity = latestEquity?.equity ?? account.cash;
+    const candidates: { hit: ScanHit; bars: Bar[]; daysToEarnings: number | null }[] = [];
+    const earnings = await this.prisma.calendarEvent.findMany({
+      where: { type: 'earnings', symbol: { in: ranked.map((h) => h.symbol) }, date: { gte: new Date(Date.now() - DAY_MS) } },
+      orderBy: { date: 'asc' },
+    });
+    for (const hit of ranked) {
+      const bars = await this.bars(hit.symbol);
+      if (bars.length < 30 || bars.at(-1)!.date !== hit.close_date) continue;
+      const next = earnings.find((e) => e.symbol === hit.symbol);
+      const daysToEarnings = next ? Math.round((next.date.getTime() - toDate(hit.close_date).getTime()) / DAY_MS) : null;
+      candidates.push({ hit, bars, daysToEarnings });
+    }
+    const spy = await this.bars(BENCHMARK);
+
+    for (const account of accounts) await this.judge(account, candidates, spy, condition, ceiling);
+    return candidates.length;
+  }
+
+  /** 한 계좌의 규칙으로 후보를 판단하고, 매수면 수량까지 계획한다 */
+  private async judge(
+    account: AiAccount,
+    candidates: { hit: ScanHit; bars: Bar[]; daysToEarnings: number | null }[],
+    spy: Bar[],
+    condition: Condition | null,
+    ceiling: number | null,
+  ) {
+    const v2 = account.ruleVersion === 'v2';
+    const fresh = await this.prisma.aiAccount.findUniqueOrThrow({ where: { id: account.id } });
+    const latestEquity = await this.prisma.aiEquity.findFirst({ where: { accountId: account.id }, orderBy: { date: 'desc' } });
+    const equity = latestEquity?.equity ?? fresh.cash;
     let invested = latestEquity?.positionsValue ?? 0;
-    let cash = account.cash;
+    let cash = fresh.cash;
+    let openCount = await this.prisma.aiPosition.count({ where: { accountId: account.id, status: 'open' } });
+    const recent = await this.prisma.aiPosition.findMany({
+      where: { accountId: account.id, status: 'closed' },
+      orderBy: { exitDate: 'desc' },
+      take: RULES_V2.lossStreak,
+      select: { exitReason: true },
+    });
+    const riskPct = v2 ? riskPctV2(recent.map((r) => r.exitReason ?? '')) : RULES.riskPct;
+    const maxNew = v2 ? RULES_V2.maxNewPerDay : RULES.maxNewPerDay;
     let newBuys = 0;
 
-    for (const h of ranked) {
-      const bars = await this.bars(h.symbol);
-      if (bars.length < 30 || bars.at(-1)!.date !== h.close_date) continue;
-      const e = evaluateBuy({ setups: h.setups, rsi: h.rsi ?? null, bars, condition });
+    for (const { hit, bars, daysToEarnings } of candidates) {
+      const e = v2
+        ? evaluateBuyV2({ setups: hit.setups, rsi: hit.rsi ?? null, bars, benchmark: spy, condition, daysToEarnings })
+        : evaluateBuy({ setups: hit.setups, rsi: hit.rsi ?? null, bars, condition });
 
       let status: string = e.verdict === 'buy' ? 'planned' : e.verdict === 'hold' ? 'held' : 'watch';
       let shares: number | null = null;
@@ -267,28 +339,36 @@ export class AiDailyJob {
       if (e.verdict === 'buy' && e.stopPrice != null) {
         // 권장 비중 상한 안에서만 산다
         const room = ceiling != null ? Math.max(0, (equity * ceiling) / 100 - invested) : equity;
-        shares = Math.min(sizePosition({ equity, cash, entry: e.closePrice, stop: e.stopPrice }), Math.floor(room / e.closePrice));
-        if (newBuys >= RULES.maxNewPerDay) {
+        const sized = v2
+          ? sizePositionV2({ equity, cash, entry: e.closePrice, stop: e.stopPrice, riskPct })
+          : sizePosition({ equity, cash, entry: e.closePrice, stop: e.stopPrice });
+        shares = Math.min(sized, Math.floor(room / e.closePrice));
+        if (newBuys >= maxNew) {
           status = 'skipped';
-          note = `하루 ${RULES.maxNewPerDay}종목까지만 삽니다`;
+          note = `하루 ${maxNew}종목까지만 삽니다`;
+        } else if (v2 && openCount >= RULES_V2.maxPositions) {
+          status = 'skipped';
+          note = `보유 ${RULES_V2.maxPositions}종목이 꽉 차서 사지 않음`;
         } else if (shares <= 0) {
           status = 'skipped';
           note = '권장 비중 상한 또는 현금 때문에 살 수량이 없음';
         } else {
           newBuys++;
+          openCount++;
           cash -= shares * e.closePrice;
           invested += shares * e.closePrice;
+          if (v2 && riskPct < RULES_V2.riskPct) note = `최근 ${RULES_V2.lossStreak}번 연속 손절이라 위험을 ${riskPct * 100}%로 줄임`;
         }
       }
 
       await this.prisma.aiSignal.upsert({
-        where: { accountId_date_symbol_side: { accountId, date: toDate(h.close_date), symbol: h.symbol, side: 'buy' } },
+        where: { accountId_date_symbol_side: { accountId: account.id, date: toDate(hit.close_date), symbol: hit.symbol, side: 'buy' } },
         create: {
-          accountId,
-          date: toDate(h.close_date),
-          symbol: h.symbol,
+          accountId: account.id,
+          date: toDate(hit.close_date),
+          symbol: hit.symbol,
           side: 'buy',
-          setups: h.setups,
+          setups: hit.setups,
           verdict: e.verdict,
           status,
           checks: e.checks as unknown as Prisma.InputJsonValue,
@@ -304,31 +384,36 @@ export class AiDailyJob {
         update: {},
       });
     }
-    return ranked.length;
   }
 
-  /** 내 보유 종목을 AI 규칙으로 본다. 팔 자리면 매도 신호를 남긴다 (선택은 사용자) */
-  private async myHoldingSignals(accountId: string) {
+  /**
+   * 내 보유 종목을 그 계좌의 규칙으로 본다. 팔 자리면 매도 신호를 남긴다 (선택은 사용자).
+   * v2는 손절가가 없으면 평단가 −8%를 손절가로 본다 (오닐 원칙).
+   */
+  private async myHoldingSignals(account: AiAccount) {
     const holdings = await this.prisma.holding.findMany();
     for (const h of holdings) {
       const bars = await this.bars(h.symbol);
       const last = bars.at(-1);
       if (!last) continue;
-      const sell = evaluateHolding({ bars, stopPrice: h.stopPrice });
+      const stop = h.stopPrice ?? (account.ruleVersion === 'v2' ? h.avgCost * (1 - RULES_V2.maxLossPct) : null);
+      const sell = evaluateHolding({ bars, stopPrice: stop });
       if (!sell) continue;
+      const detail =
+        sell.reason === 'stop' && h.stopPrice == null ? `${sell.detail} (평단 $${h.avgCost.toFixed(2)}의 −8%)` : sell.detail;
       await this.prisma.aiSignal.upsert({
-        where: { accountId_date_symbol_side: { accountId, date: toDate(last.date), symbol: h.symbol, side: 'sell' } },
+        where: { accountId_date_symbol_side: { accountId: account.id, date: toDate(last.date), symbol: h.symbol, side: 'sell' } },
         create: {
-          accountId,
+          accountId: account.id,
           date: toDate(last.date),
           symbol: h.symbol,
           side: 'sell',
           setups: [sell.reason],
           verdict: 'sell',
           status: 'done',
-          checks: [{ key: sell.reason, label: EXIT_LABEL[sell.reason], pass: false, detail: sell.detail }] as Prisma.InputJsonValue,
+          checks: [{ key: sell.reason, label: EXIT_LABEL[sell.reason], pass: false, detail }] as Prisma.InputJsonValue,
           closePrice: last.close,
-          reasonKo: `내 보유 종목이에요. ${sell.detail}. AI 규칙이라면 다음 거래일 시가에 정리합니다.`,
+          reasonKo: `내 보유 종목이에요. ${detail}. AI 규칙이라면 다음 거래일 시가에 정리합니다.`,
           note: '내 보유 종목',
         },
         update: {},
@@ -340,8 +425,7 @@ export class AiDailyJob {
   private async mySnapshot() {
     const capital = await this.prisma.setting.findUnique({ where: { key: 'capital' } });
     if (typeof capital?.value !== 'number') return;
-    const spy = await this.bars(BENCHMARK);
-    const date = spy.at(-1)?.date;
+    const date = (await this.bars(BENCHMARK)).at(-1)?.date;
     if (!date) return;
     const [holdings, realized] = await Promise.all([
       this.prisma.holding.findMany(),
@@ -363,5 +447,3 @@ export class AiDailyJob {
     });
   }
 }
-
-export { SETUP_LABEL };

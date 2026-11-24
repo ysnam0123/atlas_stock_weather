@@ -48,7 +48,8 @@ export const EXIT_LABEL: Record<string, string> = {
   stop: '손절가 도달',
   target: '목표가 도달',
   ma50: '종가 50일선 이탈',
-  time: '시간 손절 (20거래일 안에 +1R 미달)',
+  time: '시간 손절 (+1R 미달)',
+  ema21: '종가 21일 지수이동평균 이탈',
 };
 
 export interface Check {

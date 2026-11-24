@@ -14,19 +14,24 @@ const VERDICT: Record<string, { text: string; className: string }> = {
 const ORDER = ["sell", "buy", "hold", "watch"];
 const SHOW = 5;
 
-/** 홈의 AI 신호 요약: 가장 최근 장의 신호와 AI vs 나 수익률. 자세한 판단은 AI 대결 화면에서 */
+/** 홈에서 보여줄 대표 계좌: 더 엄격한 v2 (없으면 첫 계좌) */
+export const primaryAccount = (ai: AiDuelResponse | undefined) => ai?.accounts.find((a) => a.version === "v2") ?? ai?.accounts[0];
+
+const signedPct = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}%`;
+
+/** 홈의 AI 신호 요약: v2의 가장 최근 장 신호와 AI v1·v2·나 수익률. 자세한 판단은 AI 대결 화면에서 */
 export function AiSignalCard({ ai, failed }: { ai: AiDuelResponse | undefined; failed: boolean }) {
-  const latest = ai?.signals[0]?.date;
-  const today = (ai?.signals ?? [])
+  const view = primaryAccount(ai);
+  const latest = view?.signals[0]?.date;
+  const today = (view?.signals ?? [])
     .filter((s) => s.date === latest)
     .sort((a, b) => ORDER.indexOf(a.verdict) - ORDER.indexOf(b.verdict));
-  const score = ai?.score;
 
   return (
     <section aria-labelledby="ai-card-title" className="flex h-full flex-col">
       <SectionTitle
         id="ai-card-title"
-        aside={latest && `${tradeDay(latest).month}월 ${tradeDay(latest).day}일 종가`}
+        aside={latest && `v2, ${tradeDay(latest).month}월 ${tradeDay(latest).day}일 종가`}
       >
         AI 신호
       </SectionTitle>
@@ -35,7 +40,7 @@ export function AiSignalCard({ ai, failed }: { ai: AiDuelResponse | undefined; f
         <p className="mt-3 text-[15px] text-text-muted">AI 데이터 없음</p>
       ) : !ai ? (
         <div className="mt-3 h-20 rounded-xl bg-surface motion-safe:animate-pulse" aria-busy="true" />
-      ) : !ai.account ? (
+      ) : !view ? (
         <p className="mt-2 text-[15px] leading-[1.5] text-text-secondary">
           AI에게 모의 계좌를 주면 매일 셋업을 찾아 사고팔아요. 나와 성적을 겨뤄 보세요.
         </p>
@@ -62,15 +67,14 @@ export function AiSignalCard({ ai, failed }: { ai: AiDuelResponse | undefined; f
         </ul>
       )}
 
-      {score && (
+      {ai && ai.accounts.length > 0 && (
         <p className="mt-3 text-[13px] text-text-secondary tabular-nums">
-          수익률 AI {score.ai.returnPct >= 0 ? "+" : "−"}
-          {Math.abs(score.ai.returnPct).toFixed(1)}%
-          {score.me && `, 나 ${score.me.returnPct >= 0 ? "+" : "−"}${Math.abs(score.me.returnPct).toFixed(1)}%`}
+          수익률 {ai.accounts.map((a) => `AI ${a.version} ${signedPct(a.score.returnPct)}`).join(", ")}
+          {ai.me && `, 나 ${signedPct(ai.me.returnPct)}`}
         </p>
       )}
       <Link href="/ai" className="pressable mt-auto flex min-h-11 items-center justify-between pt-3 text-[15px] font-medium text-primary">
-        {ai?.account ? "AI 판단과 계획 보기" : "AI 대결 시작하기"}
+        {view ? "AI 판단과 계획 보기" : "AI 대결 시작하기"}
         <ChevronRight size={18} aria-hidden />
       </Link>
     </section>

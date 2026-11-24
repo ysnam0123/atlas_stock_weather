@@ -234,10 +234,14 @@ export class CommentaryJob {
     };
   }
 
-  /** 가장 최근 장의 AI 신호 중 아직 해설이 없는 것 */
+  /** 가장 최근 장의 AI 신호 중 아직 해설이 없는 것 (v1·v2 계좌 모두) */
   private async signalInput(weather: string | null) {
-    const account = await this.prisma.aiAccount.findFirst({ where: { active: true } });
-    if (!account) return [];
+    const accounts = await this.prisma.aiAccount.findMany({ where: { active: true } });
+    return (await Promise.all(accounts.map((a) => this.accountSignals(a.id, a.ruleVersion, weather)))).flat();
+  }
+
+  private async accountSignals(accountId: string, ruleVersion: string, weather: string | null) {
+    const account = { id: accountId };
     const latest = await this.prisma.aiSignal.findFirst({ where: { accountId: account.id }, orderBy: { date: 'desc' } });
     if (!latest) return [];
     const rows = await this.prisma.aiSignal.findMany({ where: { accountId: account.id, date: latest.date } });
@@ -258,6 +262,7 @@ export class CommentaryJob {
       id: r.id,
       symbol: r.symbol,
       name: nameOf.get(r.symbol) ?? r.symbol,
+      ruleVersion,
       marketWeather: weather,
       verdict: r.verdict,
       setups: r.setups.map((s) => SETUP_LABEL[s] ?? s),

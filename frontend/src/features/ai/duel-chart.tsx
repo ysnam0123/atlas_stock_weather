@@ -7,19 +7,20 @@ import { tradeDay } from "@/shared/lib/time";
 const H = 200;
 const PAD = { top: 12, right: 56, bottom: 24, left: 40 };
 
-/** 계열은 셋뿐이라 색을 고정한다. 범례 + 끝 라벨로 색만으로 구분하지 않는다 */
+/** 계열은 넷뿐이라 색을 고정한다. 범례 + 끝 라벨로 색만으로 구분하지 않는다 */
 const LINES = [
-  { key: "ai", label: "AI", className: "stroke-primary", dot: "bg-primary" },
-  { key: "me", label: "나", className: "stroke-text", dot: "bg-text" },
-  { key: "spy", label: "S&P 500", className: "stroke-text-muted", dot: "bg-text-muted" },
+  { key: "v1", label: "AI v1", className: "stroke-primary", fill: "fill-primary", dot: "bg-primary" },
+  { key: "v2", label: "AI v2", className: "stroke-sector-healthcare", fill: "fill-sector-healthcare", dot: "bg-sector-healthcare" },
+  { key: "me", label: "나", className: "stroke-text", fill: "fill-text", dot: "bg-text" },
+  { key: "spy", label: "S&P 500", className: "stroke-text-muted", fill: "fill-text-muted", dot: "bg-text-muted" },
 ] as const;
 
 const fmt = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}%`;
 
-/** 대결 시작 = 0%. AI, 나, S&P 500 수익률 곡선 */
+/** 대결 시작 = 0%. AI v1, AI v2, 나, S&P 500 수익률 곡선 */
 export function DuelChart({ series }: { series: AiDuelResponse["series"] }) {
   const [ref, width] = useWidth<HTMLDivElement>();
-  const values = series.flatMap((p) => [p.ai, p.me, p.spy]).filter((v): v is number => v != null);
+  const values = series.flatMap((p) => [p.v1, p.v2, p.me, p.spy]).filter((v): v is number => v != null);
   const lo = Math.min(-1, ...values);
   const hi = Math.max(1, ...values);
   const plotW = Math.max(0, width - PAD.left - PAD.right);
@@ -54,7 +55,7 @@ export function DuelChart({ series }: { series: AiDuelResponse["series"] }) {
           <p className="py-8 text-center text-[14px] text-text-muted">장이 하루 이상 지나야 곡선이 생겨요</p>
         ) : (
           width > 0 && (
-            <svg width={width} height={H} role="img" aria-label="AI, 나, S&P 500 수익률 비교">
+            <svg width={width} height={H} role="img" aria-label="AI v1, AI v2, 나, S&P 500 수익률 비교">
               {[lo, 0, hi].map((t) => (
                 <g key={t}>
                   <line x1={PAD.left} x2={PAD.left + plotW} y1={y(t)} y2={y(t)} className={t === 0 ? "stroke-text-muted" : "stroke-border"} strokeWidth={1} />
@@ -66,7 +67,7 @@ export function DuelChart({ series }: { series: AiDuelResponse["series"] }) {
               {lines.map((l) => (
                 <g key={l.key}>
                   <path d={l.d} fill="none" className={l.className} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-                  <circle cx={l.ex} cy={l.ey} r={4} className={`${l.className.replace("stroke-", "fill-")} stroke-bg`} strokeWidth={2} />
+                  <circle cx={l.ex} cy={l.ey} r={4} className={`${l.fill} stroke-bg`} strokeWidth={2} />
                   {/* 끝 라벨이 겹치면 범례에 맡긴다 */}
                   {l.showLabel && (
                     <text x={l.ex + 8} y={l.ey} dy="0.32em" className="fill-text text-[11px] tabular-nums">

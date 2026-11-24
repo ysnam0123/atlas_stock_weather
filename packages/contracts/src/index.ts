@@ -134,6 +134,20 @@ export interface MyWatchItem extends PriceFields {
   exchange: string;
   note: string | null;
   addedAt: string;
+  /** AI v2 매수 규칙으로 본 관심 종목 상태. 스캔·일봉이 없으면 null */
+  readiness: WatchReadiness | null;
+}
+
+/** 관심 종목이 왜 매수 대기인지: AI v2 매수 규칙 체크리스트 (docs/ai-duel.md) */
+export interface WatchReadiness {
+  /** 판단한 장 날짜 (뉴욕) */
+  date: string;
+  /** buy 모두 통과, hold 종목은 통과했지만 시장이 맑지 않음, watch 종목 조건에서 걸림 */
+  verdict: 'buy' | 'hold' | 'watch';
+  checks: AiCheck[];
+  reasonKo: string;
+  /** 지금 산다면 규칙상 손절가 */
+  stopPrice: number | null;
 }
 
 export interface MySummary {
@@ -240,8 +254,11 @@ export interface AiPositionRow {
   shares: number;
   entryDate: string;
   entryPrice: number;
+  /** v2는 +1R을 넘으면 본전으로 올라간다 */
   stopPrice: number;
-  targetPrice: number;
+  /** v1 고정 목표가. v2는 목표가 없이 추세 이탈로 판다 */
+  targetPrice: number | null;
+  breakeven: boolean;
   lastClose: number | null;
   pnl: number | null;
   pnlPct: number | null;
@@ -264,16 +281,28 @@ export interface AiClosedRow {
   pnlPct: number | null;
 }
 
-export interface AiDuelResponse {
-  account: { id: string; startCapital: number; cash: number; startedAt: string; lastProcessedDate: string | null } | null;
-  /** 내 총 투자금. 없으면 내 성적을 잴 수 없다 */
-  capital: number | null;
-  score: { ai: AiScore; me: AiScore | null; benchmarkPct: number | null } | null;
-  /** 대결 시작 = 0%. 날짜별 수익률 */
-  series: { date: string; ai: number | null; me: number | null; spy: number | null }[];
+export type AiRuleVersion = 'v1' | 'v2';
+
+/** 규칙 버전 하나의 모의 계좌 */
+export interface AiAccountView {
+  version: AiRuleVersion;
+  label: string;
+  account: { id: string; startCapital: number; cash: number; startedAt: string; lastProcessedDate: string | null };
+  score: AiScore;
   positions: AiPositionRow[];
   closed: AiClosedRow[];
   signals: AiSignal[];
+}
+
+export interface AiDuelResponse {
+  /** 내 총 투자금. 없으면 내 성적을 잴 수 없다 */
+  capital: number | null;
+  /** v1, v2 순. 계좌가 없으면 빈 배열 */
+  accounts: AiAccountView[];
+  me: AiScore | null;
+  benchmarkPct: number | null;
+  /** 대결 시작 = 0%. 날짜별 수익률 */
+  series: { date: string; v1: number | null; v2: number | null; me: number | null; spy: number | null }[];
   lastRun: { status: RunStatus; startedAt: string; finishedAt: string | null; error: string | null } | null;
 }
 

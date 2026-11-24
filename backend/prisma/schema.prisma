@@ -193,6 +193,8 @@ model Setting {
 
 model AiAccount {
   id                String       @id @default(uuid())
+  /** 규칙 버전 (v1 추세 추종 스윙, v2 원칙 강화). 같은 자금으로 나란히 돌려 비교한다 */
+  ruleVersion       String       @default("v1")
   startCapital      Float
   cash              Float
   active            Boolean      @default(true)
@@ -245,7 +247,10 @@ model AiPosition {
   entryDate   DateTime  @db.Date
   entryPrice  Float
   stopPrice   Float
-  targetPrice Float
+  /** v1은 고정 목표가, v2는 목표가 없이 추세 이탈로 판다 */
+  targetPrice Float?
+  /** v2: +1R을 넘어 손절가를 본전으로 올렸는지 */
+  breakeven   Boolean   @default(false)
   status      String // open | closed
   /** 종가 규칙(50일선 이탈·시간 손절)에 걸려 다음 날 시가에 팔 예정이면 그 이유 */
   pendingExit String?
