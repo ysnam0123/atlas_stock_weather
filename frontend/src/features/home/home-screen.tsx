@@ -13,11 +13,14 @@ import { CommentaryCard } from "./commentary-card";
 import { IntelFeed } from "./intel-feed";
 import { MarketDetail } from "./market-detail";
 import { MarketPosture } from "./market-posture";
+import { PremarketCard } from "./premarket-card";
 import { Positions } from "./positions";
 import { ScheduleCard } from "./schedule-card";
 import { SectorRanking } from "./sector-ranking";
 import { useHome, useRunMarketDaily } from "./use-home";
 import { WatchCard } from "./watch-card";
+import { WeekCard } from "./week-card";
+import { homeMode } from "@/shared/lib/time";
 
 /** 근거를 펼친 뒤 그 자리로 내려간다. 움직임 줄이기 설정이면 바로 이동 */
 function scrollToId(id: string) {
@@ -30,7 +33,8 @@ function scrollToId(id: string) {
 /**
  * 트레이더 홈 (docs/frontend.md "홈 구성"). 트레이더가 아침에 묻는 순서대로:
  * 시장 자세 → Claude 해설 → 오늘 할 일 → 보유 종목 → 내 종목 소식 → AI 신호 → 관심 → 일정 → 섹터 → 흐름과 근거.
- * 데스크톱: 가운데 큰 패널 + 오른쪽 카드 열(해설, 관심, 일정). 모바일: 카드가 위 순서로 쌓인다.
+ * 시간대(homeMode): 저녁엔 오늘 밤 프리마켓, 주말엔 이번 주 정리를 오른쪽 열 맨 위에.
+ * 데스크톱: 가운데 큰 패널 + 오른쪽 카드 열(시간대 카드, 해설, 관심, 일정). 모바일: 카드가 위 순서로 쌓인다.
  * 모바일 순서를 맞추려고 패널과 오른쪽 열은 모바일에서 display: contents로 풀고 order로 줄 세운다.
  */
 export function HomeScreen() {
@@ -48,6 +52,7 @@ export function HomeScreen() {
 
   // 데이터가 온 뒤에만 현재 시각을 읽는다 (프리렌더 때는 여기까지 오지 않는다)
   const now = new Date();
+  const mode = homeMode(now);
   const { weather } = data;
   const openCapital = () => setCapitalOpen(true);
 
@@ -79,6 +84,7 @@ export function HomeScreen() {
             aiSignals={(primaryAccount(ai.data)?.signals ?? []).filter((s) => s.date === primaryAccount(ai.data)?.signals[0]?.date)}
             earnings={data.earnings}
             congressFlows={data.intel.congressFlows}
+            premarket={data.premarket}
             now={now}
             onInfo={setInfo}
             onSetCapital={openCapital}
@@ -107,6 +113,16 @@ export function HomeScreen() {
         aria-label="해설, 관심 종목, 일정"
         className="max-lg:contents lg:sticky lg:top-5 lg:flex lg:h-[calc(100dvh-40px)] lg:flex-col lg:gap-5 lg:overflow-y-auto"
       >
+        {/* 시간대 카드: 주말엔 이번 주 정리, 저녁엔 오늘 밤 프리마켓 */}
+        {mode === "weekend" && data.week ? (
+          <div className={`${CARD} max-lg:order-1`}>
+            <WeekCard data={data.week} />
+          </div>
+        ) : mode === "evening" && data.premarket ? (
+          <div className={`${CARD} max-lg:order-1`}>
+            <PremarketCard data={data.premarket} />
+          </div>
+        ) : null}
         <div className={`${CARD} max-lg:order-2`}>
           <CommentaryCard weather={weather} />
         </div>

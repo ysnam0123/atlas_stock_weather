@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Market } from '../generated/prisma/client.js';
 import { congressFlows } from '../jobs/congress-members.js';
 import { MARKET_DAILY } from '../jobs/market-daily.job.js';
+import { PREMARKET_INDEXES } from '../jobs/premarket.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MARKET_DAILY_SLOT } from '../scheduler/scheduler.service.js';
 import { nextSlot } from '../scheduler/slots.js';
@@ -9,6 +10,9 @@ import { lastNightHoliday, US_EARLY_CLOSES } from '../scheduler/us-market-calend
 
 /** 흐름 차트: 최근 1년(거래일 기준) */
 const HISTORY_DAYS = 260;
+/** 프리마켓 스냅샷은 찍고 12시간까지만 보여준다 (다음 날 종가 분석이 오면 의미가 없다) */
+const PREMARKET_FRESH_MS = 12 * 60 * 60 * 1000;
+const WEEK_DAYS = 5;
 /** 섹터 순위 히트맵: 최근 20거래일 (약 한 달) */
 const HEATMAP_DAYS = 20;
 
@@ -23,7 +27,7 @@ export class HomeService {
   constructor(private readonly prisma: PrismaService) {}
 
   async get(market: Market) {
-    const [weather, history, sectors, sectorHistory, run, earnings, intel] = await Promise.all([
+    const [weather, history, sectors, sectorHistory, run, earnings, intel, premarket, week] = await Promise.all([
       this.weather(market),
       this.history(market),
       this.sectors(market),
@@ -35,6 +39,8 @@ export class HomeService {
       }),
       this.earnings(),
       this.intel(),
+      this.premarket(),
+      this.week(market),
     ]);
     const holiday = lastNightHoliday();
     const sessionNote = holiday
@@ -42,7 +48,122 @@ export class HomeService {
       : weather && US_EARLY_CLOSES.has(weather.tradeDate)
         ? { kind: 'early' as const, date: weather.tradeDate, name: '조기 폐장' }
         : null;
-    return { market, weather, history, sectors, sectorHistory, run, earnings, intel, sessionNote, nextRunAt: nextSlot(MARKET_DAILY_SLOT) };
+    return {
+      market,
+      weather,
+      history,
+      sectors,
+      sectorHistory,
+      run,
+      earnings,
+      intel,
+      sessionNote,
+      premarket,
+      week,
+      nextRunAt: nextSlot(MARKET_DAILY_SLOT),
+    };
+  }
+
+  /**
+   * 오늘 밤 프리마켓 스냅샷 (21:30 KST 한 번). 찍은 지 PREMARKET_FRESH_MS 안일 때만 보여준다.
+   * 내 보유 종목은 손절가 아래에서 거래되는지도 같이 본다
+   */
+  private async premarket() {
+    const latest = await this.prisma.premarketSnapshot.findFirst({ orderBy: { takenAt: 'desc' } });
+    if (!latest || Date.now() - latest.takenAt.getTime() > PREMARKET_FRESH_MS) return null;
+    const [rows, holdings, watch] = await Promise.all([
+      this.prisma.premarketSnapshot.findMany({ where: { sessionDate: latest.sessionDate } }),
+      this.prisma.holding.findMany({ select: { symbol: true, stopPrice: true } }),
+      this.prisma.watchItem.findMany({ select: { symbol: true } }),
+    ]);
+    const stop = new Map(holdings.map((h) => [h.symbol, h.stopPrice]));
+    const watched = new Set(watch.map((w) => w.symbol));
+    const names = await this.prisma.symbol.findMany({
+      where: { symbol: { in: rows.map((r) => r.symbol) } },
+      select: { symbol: true, nameEn: true, nameKo: true },
+    });
+    const nameOf = new Map(names.map((n) => [n.symbol, n]));
+    const kind = (symbol: string) =>
+      PREMARKET_INDEXES.includes(symbol) ? ('index' as const) : stop.has(symbol) ? ('holding' as const) : watched.has(symbol) ? ('watch' as const) : null;
+    const order = { index: 0, holding: 1, watch: 2 };
+    const items = rows
+      .map((r) => ({ r, tracked: kind(r.symbol) }))
+      .filter((x): x is { r: (typeof rows)[number]; tracked: 'index' | 'holding' | 'watch' } => x.tracked != null)
+      .sort((a, b) => order[a.tracked] - order[b.tracked] || PREMARKET_INDEXES.indexOf(a.r.symbol) - PREMARKET_INDEXES.indexOf(b.r.symbol))
+      .map(({ r, tracked }) => {
+        const stopPrice = stop.get(r.symbol) ?? null;
+        return {
+          symbol: r.symbol,
+          nameEn: nameOf.get(r.symbol)?.nameEn ?? r.symbol,
+          nameKo: nameOf.get(r.symbol)?.nameKo ?? null,
+          tracked,
+          price: r.price,
+          prevClose: r.prevClose,
+          changePct: (r.price / r.prevClose - 1) * 100,
+          priceAt: r.priceAt.toISOString(),
+          stopPrice,
+          belowStop: stopPrice != null && r.price < stopPrice,
+        };
+      });
+    return { sessionDate: day(latest.sessionDate), takenAt: latest.takenAt.toISOString(), items };
+  }
+
+  /** 이번 주 정리 (주말 홈): 최근 5거래일의 날씨, S&P 500, 섹터 변화, 내 매매·AI 매매 */
+  private async week(market: Market) {
+    const days = await this.prisma.marketSnapshot.findMany({
+      where: { market },
+      orderBy: { tradeDate: 'desc' },
+      take: WEEK_DAYS + 1,
+      select: { tradeDate: true, condition: true },
+    });
+    if (days.length < 2) return null;
+    const week = days.slice(0, WEEK_DAYS).reverse();
+    const before = days[WEEK_DAYS] ?? null;
+    const from = week[0].tradeDate;
+    const to = week.at(-1)!.tradeDate;
+
+    const spyBars = await this.prisma.priceBar.findMany({
+      where: { symbol: 'SPY', date: { lte: to } },
+      orderBy: { date: 'desc' },
+      take: WEEK_DAYS + 1,
+      select: { close: true },
+    });
+    const spyPct = spyBars.length === WEEK_DAYS + 1 ? (spyBars[0].close / spyBars[WEEK_DAYS].close - 1) * 100 : null;
+
+    let sectorMoves: { sector: string; change: number }[] = [];
+    if (before) {
+      const [now, then] = await Promise.all([
+        this.prisma.sectorSnapshot.findMany({ where: { market, tradeDate: to } }),
+        this.prisma.sectorSnapshot.findMany({ where: { market, tradeDate: before.tradeDate } }),
+      ]);
+      const prev = new Map(then.map((x) => [x.sector, x.uptrendRatio]));
+      sectorMoves = now
+        .filter((x) => prev.has(x.sector))
+        .map((x) => ({ sector: x.sector, change: x.uptrendRatio - prev.get(x.sector)! }))
+        .sort((a, b) => b.change - a.change);
+    }
+
+    const range = { gte: from, lte: to };
+    const [trades, aiOpened, aiClosed] = await Promise.all([
+      this.prisma.trade.findMany({ where: { date: range }, select: { side: true, realizedPnl: true } }),
+      this.prisma.aiPosition.count({ where: { entryDate: range, account: { active: true } } }),
+      this.prisma.aiPosition.findMany({ where: { exitDate: range, account: { active: true } }, select: { pnl: true } }),
+    ]);
+
+    return {
+      from: day(from),
+      to: day(to),
+      days: week.map((d) => ({ date: day(d.tradeDate), condition: d.condition })),
+      spyPct,
+      best: sectorMoves[0] ?? null,
+      worst: sectorMoves.at(-1) ?? null,
+      my: {
+        buys: trades.filter((t) => t.side === 'buy').length,
+        sells: trades.filter((t) => t.side === 'sell').length,
+        realizedPnl: trades.reduce((sum, t) => sum + (t.realizedPnl ?? 0), 0),
+      },
+      ai: { opened: aiOpened, closed: aiClosed.length, realizedPnl: aiClosed.reduce((sum, p) => sum + (p.pnl ?? 0), 0) },
+    };
   }
 
   /**

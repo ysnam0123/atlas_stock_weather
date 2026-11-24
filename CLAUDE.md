@@ -48,6 +48,7 @@ pnpm --filter backend job ai_daily           # AI 모의 계좌 하루 처리 (�
 pnpm --filter backend job commentary_daily   # Claude 해설 (장 날짜마다 한 번, 이미 있으면 건너뜀)
 pnpm --filter backend job earnings_calendar  # 실적 발표 일정 (FMP)
 pnpm --filter backend job stock_intel        # 내 종목 뉴스·공시·분기 실적·의원 거래 (SEC_USER_AGENT 필요)
+pnpm --filter backend job premarket_snapshot # 내 종목·지수 프리마켓 가격 (한국 저녁, 장 시작 전에만 값이 있음)
 pnpm --filter backend test        # Adapter·스케줄 단위 테스트 (fixture: backend/test/fixtures/skills)
 pnpm --filter frontend dev         # Next.js
 ```

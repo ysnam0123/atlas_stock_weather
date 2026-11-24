@@ -6,6 +6,7 @@ import { BACKFILL_UPTREND, BackfillUptrendJob } from '../jobs/backfill-uptrend.j
 import { MARKET_DAILY, MarketDailyJob } from '../jobs/market-daily.job.js';
 import { EARNINGS_CALENDAR, EarningsCalendarJob } from '../jobs/earnings-calendar.job.js';
 import { PRICES_DAILY, PricesService } from '../jobs/prices.service.js';
+import { PREMARKET_SNAPSHOT, PremarketJob } from '../jobs/premarket.job.js';
 import { STOCK_INTEL, StockIntelJob } from '../jobs/stock-intel.job.js';
 import { SYMBOLS_WEEKLY, SymbolsWeeklyJob } from '../jobs/symbols-weekly.job.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -30,6 +31,15 @@ const BACKFILL_UPTREND_SLOT: Slot = { days: [0], times: ['10:00'] };
 /** 종목 목록(Nasdaq Trader + 한투 마스터 한글명)은 주 1회면 충분하다 */
 const SYMBOLS_WEEKLY_SLOT: Slot = { days: [0], times: ['09:00'] };
 
+/**
+ * 저녁 프리마켓 스냅샷: 한국 월~금 21:30. 미국 장 시작 전(겨울 23:30, 여름 22:30 KST)이라 두 계절 다 프리마켓 시간이다.
+ * 오늘 밤 미국장이 휴장이면 건너뛴다
+ */
+export const PREMARKET_SLOT: Slot = { days: [1, 2, 3, 4, 5], times: ['21:30'], skip: (kstDate) => !isUsTradingDay(kstDate) };
+
+/** 21:30에서 1시간 안에만 찍는다. 그 뒤(여름엔 22:30 개장)는 프리마켓이 아니다 */
+const PREMARKET_LATE_MS = 60 * 60 * 1000;
+
 /** 한 실행 시각에서 실패가 이만큼 쌓이면 다음 시각까지 다시 시도하지 않는다 */
 const MAX_ATTEMPTS_PER_SLOT = 3;
 
@@ -48,6 +58,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly earnings: EarningsCalendarJob,
     private readonly commentary: CommentaryJob,
     private readonly stockIntel: StockIntelJob,
+    private readonly premarket: PremarketJob,
   ) {}
 
   async onApplicationBootstrap() {
@@ -79,6 +90,7 @@ export class SchedulerService implements OnApplicationBootstrap {
       await this.ensure(COMMENTARY_DAILY, MARKET_DAILY_SLOT, () => this.commentary.run());
       // 내 종목 소식: 뉴스·공시, 분기 실적, 의원 거래 신고
       await this.ensure(STOCK_INTEL, MARKET_DAILY_SLOT, () => this.stockIntel.run());
+      await this.ensure(PREMARKET_SNAPSHOT, PREMARKET_SLOT, () => this.premarket.run(), PREMARKET_LATE_MS);
       await this.ensure(BACKFILL_UPTREND, BACKFILL_UPTREND_SLOT, () => this.backfillUptrend.run());
       await this.ensure(SYMBOLS_WEEKLY, SYMBOLS_WEEKLY_SLOT, () => this.symbolsWeekly.run());
     } catch (err) {
@@ -88,9 +100,11 @@ export class SchedulerService implements OnApplicationBootstrap {
     }
   }
 
-  private async ensure(kind: string, slot: Slot, job: () => Promise<unknown>) {
+  /** lateMs: 이 시각이 이만큼 지났으면 보충하지 않는다 (프리마켓은 장이 열리면 의미가 없다) */
+  private async ensure(kind: string, slot: Slot, job: () => Promise<unknown>, lateMs?: number) {
     const due = latestDueSlot(slot);
     if (!due) return;
+    if (lateMs != null && Date.now() - due.getTime() > lateMs) return;
 
     const since = await this.prisma.run.findMany({
       where: { kind, startedAt: { gte: due } },

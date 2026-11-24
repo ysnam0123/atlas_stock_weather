@@ -422,3 +422,21 @@ model CongressTrade {
   @@index([ticker])
   @@map("congress_trades")
 }
+
+// ── Phase 7: 저녁 프리마켓 스냅샷 (하루 1회, 기준 시각 표시. 실시간 아님) ──
+
+model PremarketSnapshot {
+  id          String   @id @default(uuid())
+  symbol      String
+  /// 그날 열릴 미국 장 날짜 (뉴욕)
+  sessionDate DateTime @db.Date
+  takenAt     DateTime @db.Timestamptz
+  /// 프리마켓 마지막 체결가와 그 시각
+  price       Float
+  priceAt     DateTime @db.Timestamptz
+  /// 전날 정규장 종가
+  prevClose   Float
+
+  @@unique([symbol, sessionDate])
+  @@map("premarket_snapshots")
+}

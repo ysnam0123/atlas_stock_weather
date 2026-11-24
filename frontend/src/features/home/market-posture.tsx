@@ -96,6 +96,13 @@ export function MarketPosture({
         </div>
       </div>
 
+      {sessionNote && (
+        <p className="mt-4 text-[14px] text-text-secondary">
+          {sessionNote.kind === "holiday"
+            ? `어젯밤 미국 시장은 ${sessionNote.name}로 휴장이었어요. 위 판정은 그 전 장 기준이고, 다음 수집은 장이 열린 다음 날이에요.`
+            : "이 장은 오후 1시(뉴욕)에 일찍 끝난 조기 폐장일이었어요. 거래가 적어 판정이 평소보다 덜 믿을 만해요."}
+        </p>
+      )}
     </section>
   );
 }

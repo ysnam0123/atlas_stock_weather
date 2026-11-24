@@ -81,7 +81,44 @@ export interface HomeResponse {
   intel: { news: HomeIntelNews[]; congressFlows: HomeCongressFlow[] };
   /** 어젯밤 미국장이 휴장이었거나, 화면의 장이 조기 폐장(오후 1시)이었으면. date는 뉴욕 날짜 */
   sessionNote: { kind: 'holiday' | 'early'; date: string; name: string } | null;
+  /** 오늘 밤 프리마켓 (21:30 KST 한 번, 12시간 동안만). 실시간 아님 */
+  premarket: HomePremarket | null;
+  /** 최근 5거래일 정리 (주말 홈) */
+  week: HomeWeek | null;
   nextRunAt: string | null;
+}
+
+export interface HomePremarket {
+  /** 오늘 밤 열릴 뉴욕 장 날짜 */
+  sessionDate: string;
+  takenAt: string;
+  items: {
+    symbol: string;
+    nameEn: string;
+    nameKo: string | null;
+    tracked: 'index' | 'holding' | 'watch';
+    price: number;
+    prevClose: number;
+    changePct: number;
+    /** 프리마켓 마지막 체결 시각 */
+    priceAt: string;
+    stopPrice: number | null;
+    /** 보유 종목이 프리마켓에서 손절가 아래에 거래되는 중 */
+    belowStop: boolean;
+  }[];
+}
+
+export interface HomeWeek {
+  from: string;
+  to: string;
+  days: { date: string; condition: MarketCondition | null }[];
+  /** S&P 500(SPY) 5거래일 수익률 (%) */
+  spyPct: number | null;
+  /** 상승추세 비율이 가장 많이 오른·내린 섹터 (비율 차이) */
+  best: { sector: string; change: number } | null;
+  worst: { sector: string; change: number } | null;
+  my: { buys: number; sells: number; realizedPnl: number };
+  ai: { opened: number; closed: number; realizedPnl: number };
 }
 
 // ── Phase 7: 섹터 지도 ──────────────────────────────

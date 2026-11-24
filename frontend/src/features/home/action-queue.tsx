@@ -1,4 +1,4 @@
-import type { AiSignal, HomeCongressFlow, HomeEarnings, HomeWeather, MyResponse } from "@atlas/contracts";
+import type { AiSignal, HomeCongressFlow, HomeEarnings, HomePremarket, HomeWeather, MyResponse } from "@atlas/contracts";
 import {
   CalendarDays,
   ChevronRight,
@@ -42,6 +42,7 @@ export function ActionQueue({
   aiSignals,
   earnings,
   congressFlows,
+  premarket,
   now,
   onInfo,
   onOpenConditions,
@@ -55,6 +56,8 @@ export function ActionQueue({
   earnings: HomeEarnings[];
   /** 내 종목에 의원 3명 이상이 한쪽으로 몰린 경우만 */
   congressFlows: HomeCongressFlow[];
+  /** 오늘 밤 프리마켓. 보유 종목이 손절가 아래에서 거래되면 맨 위에 */
+  premarket: HomePremarket | null;
   now: Date;
   onInfo: (target: { symbol: string; nameKo: string | null; nameEn: string }) => void;
   onOpenConditions: () => void;
@@ -62,6 +65,17 @@ export function ActionQueue({
 }) {
   const actions: Action[] = [];
   const holdings = my?.holdings ?? [];
+
+  for (const p of premarket?.items.filter((x) => x.belowStop) ?? []) {
+    actions.push({
+      key: `pre-stop-${p.symbol}`,
+      icon: ShieldAlert,
+      alert: true,
+      text: `${displayName(p)}, 프리마켓에서 손절가 아래예요`,
+      sub: `프리마켓 ${usd(p.price)}, 손절가 ${usd(p.stopPrice!)}. 본장에서 그대로면 손절 자리예요. 증권사 앱에서 확인하세요`,
+      href: "/my",
+    });
+  }
 
   for (const h of holdings) {
     if (h.stopPrice == null || h.lastClose == null || h.stopDistancePct == null) continue;

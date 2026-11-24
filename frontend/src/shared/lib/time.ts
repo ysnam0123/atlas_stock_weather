@@ -69,3 +69,14 @@ export function tradeDay(tradeDate: string) {
     dayNumber: utc / 86_400_000,
   };
 }
+
+/**
+ * 홈 시간대 (한국 시각). 주말: 토 18시 ~ 화 13시 30분 전 (새 장 데이터가 없는 동안). 저녁: 18시~다음 날 6시. 그 외 아침.
+ * 데이터가 오는 시각(화~토 13:30)과 미국 장 시간(밤)에 맞춘 것이다
+ */
+export function homeMode(now: Date): "morning" | "evening" | "weekend" {
+  const { weekday, hour, minute } = kstParts(now);
+  const t = hour * 60 + minute;
+  if (weekday === 0 || weekday === 1 || (weekday === 6 && t >= 18 * 60) || (weekday === 2 && t < 13 * 60 + 30)) return "weekend";
+  return hour >= 18 || hour < 6 ? "evening" : "morning";
+}
