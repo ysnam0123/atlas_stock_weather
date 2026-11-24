@@ -25,6 +25,8 @@ interface Action {
   sub?: string;
   href?: string;
   onClick?: () => void;
+  /** 오른쪽 끝 "종목" 버튼으로 갈 종목 상세 */
+  stock?: string;
   /** 손절가 아래 마감처럼 가장 먼저 봐야 하는 줄 */
   alert?: boolean;
   muted?: boolean;
@@ -74,6 +76,7 @@ export function ActionQueue({
       text: `${displayName(p)}, 프리마켓에서 손절가 아래예요`,
       sub: `프리마켓 ${usd(p.price)}, 손절가 ${usd(p.stopPrice!)}. 본장에서 그대로면 손절 자리예요. 증권사 앱에서 확인하세요`,
       href: "/my",
+      stock: p.symbol,
     });
   }
 
@@ -87,6 +90,7 @@ export function ActionQueue({
         text: `${displayName(h)}, 손절가 아래로 마감했어요`,
         sub: `종가 ${usd(h.lastClose)}, 손절가 ${usd(h.stopPrice)}. 정해 둔 계획대로라면 정리할 자리예요`,
         href: "/my",
+        stock: h.symbol,
       });
     } else if (h.stopDistancePct < STOP_NEAR_PCT) {
       actions.push({
@@ -95,6 +99,7 @@ export function ActionQueue({
         text: `${displayName(h)}, 손절가까지 ${h.stopDistancePct.toFixed(1)}% 남았어요`,
         sub: `종가 ${usd(h.lastClose)}, 손절가 ${usd(h.stopPrice)}`,
         href: "/my",
+        stock: h.symbol,
       });
     }
   }
@@ -107,6 +112,7 @@ export function ActionQueue({
       text: `AI 매도 신호: ${displayName(s)}`,
       sub: s.checks[0]?.detail ?? s.reasonKo,
       href: "/ai",
+      stock: s.symbol,
     });
   }
 
@@ -120,6 +126,7 @@ export function ActionQueue({
       text: `${displayName(e)} 실적 발표 ${d === 0 ? "오늘" : `D-${d}`}`,
       sub: "발표 날은 크게 움직일 수 있어요. 손절가와 비중을 미리 확인해 두세요",
       href: "/my",
+      stock: e.symbol,
     });
   }
 
@@ -133,6 +140,7 @@ export function ActionQueue({
       text: `${displayName(f)}, 의원 ${n}명이 ${f.side === "buy" ? "샀어요" : "팔았어요"}`,
       sub: `30일 안 신고 기준, 반대쪽은 ${f.side === "buy" ? f.sellers : f.buyers}명. 거래 뒤 늦게 신고되는 공개 자료예요`,
       onClick: () => onInfo(f),
+      stock: f.symbol,
     });
   }
 
@@ -156,6 +164,7 @@ export function ActionQueue({
         text: `${displayName(h)}, 목표가에 닿았어요`,
         sub: `종가 ${usd(h.lastClose)}, 목표가 ${usd(h.targetPrice)}`,
         href: "/my",
+        stock: h.symbol,
       });
     }
   }
@@ -168,6 +177,7 @@ export function ActionQueue({
       text: noStop.length === 1 ? `${displayName(noStop[0])}에 손절가가 없어요` : `보유 종목 ${noStop.length}개에 손절가가 없어요`,
       sub: "손절가가 없으면 열린 위험(최대 손실)을 계산할 수 없어요",
       href: "/my",
+      stock: noStop.length === 1 ? noStop[0].symbol : undefined,
     });
   }
 
@@ -236,18 +246,27 @@ export function ActionQueue({
               >
                 <a.icon size={18} strokeWidth={1.8} aria-hidden />
               </span>
-              <span className={`flex min-w-0 flex-1 items-center gap-3 py-3 pr-2 ${last ? "" : "border-b border-border"}`}>
+              <span className={`flex min-w-0 flex-1 items-center gap-3 py-3 ${a.stock ? "pr-20" : "pr-2"} ${last ? "" : "border-b border-border"}`}>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[16px] leading-snug ${a.muted ? "text-text-secondary" : ""}`}>{a.text}</span>
                   {a.sub && <span className="mt-0.5 block text-[13px] leading-[1.45] text-text-muted">{a.sub}</span>}
                 </span>
-                {(a.href || a.onClick) && <ChevronRight size={18} className="shrink-0 text-text-muted" aria-hidden />}
+                {(a.href || a.onClick) && !a.stock && <ChevronRight size={18} className="shrink-0 text-text-muted" aria-hidden />}
               </span>
             </>
           );
           const row = "flex w-full items-center gap-3 rounded-2xl pl-2 text-left";
           return (
-            <li key={a.key}>
+            <li key={a.key} className="relative">
+              {a.stock && (
+                <Link
+                  href={`/stocks/${encodeURIComponent(a.stock)}`}
+                  className="pressable absolute top-1/2 right-2 z-10 inline-flex min-h-9 -translate-y-1/2 items-center gap-0.5 rounded-full border border-border bg-surface-raised pr-2 pl-3 text-[13px] text-text-secondary hover:border-text-muted hover:text-text"
+                >
+                  종목
+                  <ChevronRight size={14} aria-hidden />
+                </Link>
+              )}
               {a.href ? (
                 <Link href={a.href} className={`pressable ${row} hover:bg-surface`}>
                   {body}

@@ -60,6 +60,14 @@ export function AiSignalCard({ ai, failed }: { ai: AiDuelResponse | undefined; f
                   </span>
                   <span className="block truncate text-[12px] text-text-muted">{s.setupLabels.join(", ")}</span>
                 </span>
+                <Link
+                  href={`/stocks/${encodeURIComponent(s.symbol)}`}
+                  aria-label={`${displayName(s)} 종목 보기`}
+                  className="pressable inline-flex min-h-9 shrink-0 items-center gap-0.5 rounded-full border border-border pr-2 pl-3 text-[13px] text-text-secondary hover:border-text-muted hover:text-text"
+                >
+                  종목
+                  <ChevronRight size={14} aria-hidden />
+                </Link>
               </li>
             );
           })}
