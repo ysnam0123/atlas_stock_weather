@@ -144,6 +144,8 @@ export interface StockDetail {
   changePct: number | null;
   /** 오래된 순 최대 2년 */
   bars: PriceBarRow[];
+  /** 지지·저항 가격대 (최근 1년 스윙 고점·저점을 2% 안에서 묶음, 종가에서 가까운 위아래 3개씩) */
+  levels: StockReport['levels'];
   holding: { shares: number; avgCost: number; stopPrice: number | null; targetPrice: number | null; openedAt: string } | null;
   watching: boolean;
   /** AI v2 매수 규칙으로 본 지금 상태 (일봉 30개 미만이면 null) */
@@ -189,6 +191,25 @@ export interface StockReport {
   web: boolean;
   /** 스크립트가 계산한 지지·저항 (종가 위가 저항) */
   levels: { price: number; kind: 'support' | 'resistance'; touches: number; lastDate: string }[];
+  /** 분석에 쓴 가격 계산값 (%는 이미 % 단위) */
+  price: {
+    close: number;
+    changePct: number | null;
+    high52w: number;
+    low52w: number;
+    ma50: number | null;
+    ma150: number | null;
+    ma200: number | null;
+    atrPct: number | null;
+    return1m: number | null;
+    return3m: number | null;
+    return6m: number | null;
+    spyReturn6m: number | null;
+    volumeVs50d: number | null;
+  } | null;
+  /** 최근 분기부터 */
+  quarters: { fiscal: string; revenueYoyPct: number | null; operatingMarginPct: number | null; epsYoyPct: number | null }[];
+  nextEarnings: string | null;
   output: {
     headline: string;
     business: string[];

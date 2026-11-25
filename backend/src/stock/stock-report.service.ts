@@ -78,7 +78,14 @@ export class StockReportService {
   async latest(symbol: string) {
     const r = await this.prisma.stockReport.findFirst({ where: { symbol }, orderBy: { createdAt: 'desc' } });
     if (!r) return null;
-    const input = r.input as { levels?: unknown; asOf?: string; web?: boolean };
+    const input = r.input as {
+      levels?: unknown;
+      asOf?: string;
+      web?: boolean;
+      price?: unknown;
+      quarters?: { fiscal: string; revenueYoyPct: number | null; operatingMarginPct: number | null; epsYoyPct: number | null }[];
+      nextEarnings?: string | null;
+    };
     return {
       id: r.id,
       symbol: r.symbol,
@@ -88,6 +95,15 @@ export class StockReportService {
       asOf: input.asOf ?? null,
       web: input.web ?? true,
       levels: input.levels ?? [],
+      // 화면의 숫자 줄·막대·가격 사다리는 Claude가 아니라 이 계산값을 그대로 그린다
+      price: input.price ?? null,
+      quarters: (input.quarters ?? []).map((q) => ({
+        fiscal: q.fiscal,
+        revenueYoyPct: q.revenueYoyPct,
+        operatingMarginPct: q.operatingMarginPct,
+        epsYoyPct: q.epsYoyPct,
+      })),
+      nextEarnings: input.nextEarnings ?? null,
       output: r.output,
       error: r.error,
       inputTokens: r.inputTokens,

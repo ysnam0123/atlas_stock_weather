@@ -7,6 +7,7 @@ import { type Bar, type Condition, type VcpInfo, vcpActive } from '../ai/strateg
 import { adaptVcp } from '../adapters/vcp.adapter.js';
 import { evaluateBuyV2, mySize } from '../ai/strategy-v2.js';
 import { lookupMembers } from '../jobs/congress-members.js';
+import { swingLevels } from '../stock/levels.js';
 
 interface ScanHit {
   symbol: string;
@@ -277,6 +278,8 @@ export class MyService {
       lastDate: last?.date ?? null,
       changePct: last && prev ? (last.close / prev.close - 1) * 100 : null,
       bars,
+      /** 지지·저항 가격대 (스크립트 계산, 깊게 분석과 같은 계산) */
+      levels: swingLevels(bars),
       holding: holding && {
         shares: holding.shares,
         avgCost: holding.avgCost,

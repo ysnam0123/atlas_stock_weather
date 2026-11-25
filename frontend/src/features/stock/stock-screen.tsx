@@ -127,7 +127,7 @@ export function StockScreen({ symbol }: { symbol: string }) {
       </div>
 
       <div className={`${CARD} lg:p-8`}>
-        {data.bars.length ? <PlanChart bars={data.bars} lines={lines} /> : <p className="text-[15px] text-text-muted">일봉 데이터 없음</p>}
+        {data.bars.length ? <PlanChart bars={data.bars} lines={lines} levels={data.levels} /> : <p className="text-[15px] text-text-muted">일봉 데이터 없음</p>}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">

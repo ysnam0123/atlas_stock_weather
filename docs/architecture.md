@@ -64,11 +64,12 @@ TZ=Asia/Seoul
 | `backfill_uptrend` | 일 10:00 | uptrend 시계열 CSV로 빠진 날의 상승추세 비율(2023-08~)·섹터 순위(2024-07~, 11개 다 있는 날만)를 채움. 기존 행은 건드리지 않음. 시장 점수는 과거 계산 불가라 비어 있음 |
 | `evening_refresh` | 월~금 18:00 | 뉴스·공시 재수집, 캘린더 갱신 (깔때기는 다시 돌리지 않음) |
 | `core_weekly` | 일 10:00 | 보유 종목 주간 점검, 섹터·테마 주간 변화 |
-| `prices_daily` | 화~토 13:30, 18:00(보충) | 보유·관심 종목 1년치 일봉(야후) → `price_bars`. 장중 미완성 봉은 버림. 실패한 종목만 건너뜀 (구현됨, 2026-11-23) |
+| `prices_daily` | 화~토 13:30, 18:00(보충) | 보유·관심 종목과 섹터 ETF 11개·SPY의 2년치 일봉(야후) → `price_bars`. 장중 미완성 봉은 버림. 실패한 종목만 건너뜀 (구현됨, 2026-11-23) |
 | `earnings_calendar` | 화~토 13:30, 18:00(보충) | 실적 발표 일정: 전체 일정 1회 + 내 보유·관심·AI 보유 종목별 조회 → `calendar_events`. FMP 무료 플랜 한계는 `docs/skills.md` (구현됨, 2026-11-23) |
 | `stock_intel` | 화~토 13:30, 18:00(보충) | 내 보유·관심·AI 보유 종목 소식: trader-news(야후 헤드라인 + SEC 8-K, 제목에 종목이 나오는 것만) → `news_items`, trader-analyst(SEC 분기 실적) → `earnings_facts`, trader-pelosi(하원 의원 거래 신고 PDF, 최근 45일, 한 번에 40개) → `congress_docs`·`congress_trades`, 하원 의원 정당·지역구·상임위원회(unitedstates/congress-legislators 공개 JSON, 주 1회) → `congress_members`, 새 제목 Claude 번역·중요도 (구현됨, 2026-11-23) |
 | `commentary_daily` | 화~토 13:30, 18:00(보충), AI 다음 | Claude 해설 (`claude -p`, JSON 스키마 강제, 도구 끔, 금지 표현 검사): 시장 해설 3줄 + 왜 이런 날씨인가 3줄 → `commentaries`, AI 신호 한 줄 해설 → `ai_signals.commentKo`. 장 날짜마다 한 번. 하루 약 1만5천 토큰 (구현됨, 2026-11-23) |
 | `ai_daily` | 화~토 13:30, 18:00(보충), 시장 날씨·일봉 다음 | AI 모의 계좌: 체결 → 청산 → 계좌 가치 → trader-scanner 스캔·판단 → 내 종목 매도 신호 → 내 계좌 가치. 규칙은 `docs/ai-duel.md` (구현됨, 2026-11-23) |
+| `premarket_snapshot` | 월~금 21:30 (늦어도 1시간 안, 미국 휴장이면 쉼) | SPY·QQQ·보유·관심 종목의 프리마켓 마지막 가격(야후 5분봉) → `premarket_snapshots` (구현됨, 2026-11-24) |
 | `symbols_weekly` | 일 09:00 | 종목 목록(Nasdaq Trader + 한투 마스터 한글명) 갱신. 약 1만 1,800개, 한글명 약 5,900개. 사용자 별칭은 유지. SEC 티커·CIK는 Phase 3에서 `SEC_USER_AGENT`와 함께 (구현됨, 2026-11-23) |
 
 - 2026-11-01 서머타임 종료 이후 정규장은 한국 시간 23:30~06:00. 서머타임 기간엔 1시간 앞당겨진다. 실행 시각은 장 마감 기준으로 계산한다.
@@ -89,26 +90,36 @@ TZ=Asia/Seoul
 
 Claude CLI 플래그(`-p`, `--output-format json`, `--json-schema`, `--allowedTools`)는 구현 시점에 [Claude Code 공식 문서](https://docs.claude.com/en/docs/claude-code/overview)로 재확인한다.
 
-## DB 스키마 (Prisma, 초안)
+## DB 스키마 (Prisma, 2026-11-24 실제)
 
-| 테이블 | 주요 컬럼 | 단계 |
-| --- | --- | --- |
-| `runs` | id, kind, status, startedAt, finishedAt, error, claudeCostUsd | MVP |
-| `skill_outputs` | id, runId, skillId, status, rawJson(jsonb), rawMd, createdAt | MVP |
-| `market_snapshots` | date, marketScore, uptrendRatio, exposureCeiling, condition(clear·cloudy·rain), summaryKo | MVP |
-| `sector_snapshots` | date, sector, rank, uptrendRatio, trend, status | MVP |
-| `themes` | date, name, lifecycle, confidence, tickers[] | 2차 |
-| `symbols` | symbol, exchange, nameEn, nameKo, type(stock·etf), cik, alias[] | MVP |
-| `holdings` | symbol, shares, avgCost, stopPrice, stopMethod(percent·atr·support), targetPrice, thesis, openedAt | MVP |
-| `watchlist` | symbol, addedAt, note | MVP |
-| `news_items` | symbol, publishedAt(KST), title, titleKo, url, source, tags[] | MVP |
-| `earnings_facts` | symbol, period, revenue, grossMargin, opMargin, eps, yoy(jsonb) | MVP |
-| `calendar_events` | at(KST), type(earnings·macro), symbol, title | MVP |
-| `price_bars` | symbol, date, o, h, l, c, v | MVP |
-| `candidates` | id, date, symbol, sourceSkills[], stageReached, stoppedAt, conditionsMet, conditionsTotal, entry, stop, target, rr, shares, verdict, reasonKo | 3일차 |
-| `decisions` | id, symbol, candidateId?, action(bought·sold·skipped·watching), price, shares, decidedAt, note | MVP |
-| `jobs` | id, type, payload(jsonb), status, resultRunId | MVP |
-| `outcomes` | candidateId, ret5d, ret20d, ret60d, hitStop, hitTarget | 2차 |
+정본은 `backend/prisma/schema.prisma`, 변경 이력은 `backend/prisma/migrations/`. 원칙: 스킬 원본은 `skill_outputs`에 통째로(jsonb), 화면용 값은 Adapter가 정규화 테이블로 뽑는다 (절대 규칙 9). 날짜만 있는 값은 뉴욕 장 날짜(`@db.Date`), 시각은 `timestamptz`.
+
+| 묶음 | 테이블 | 무엇을 | 누가 쓰나 |
+| --- | --- | --- | --- |
+| 실행 기록 | `runs` | 작업 한 번(kind, status, 시각, 메모) | 모든 작업 |
+| | `skill_outputs` | 스킬 원본 JSON·MD 통째 | `SkillRunnerService` |
+| 시장 | `market_snapshots` | 장 날짜별 날씨·권장 비중·점수·상승추세 비율·고점 위험·큰 흐름·바닥 확인 | `market_daily`, `backfill_uptrend` |
+| | `sector_snapshots` | 장 날짜 × 11개 섹터 순위·상승추세 비율 | 같음 |
+| | `commentaries` | 장 날짜별 Claude 시장 해설 | `commentary_daily` |
+| | `calendar_events` | 실적 발표 일정 | `earnings_calendar` |
+| | `premarket_snapshots` | 종목 × 그날 장의 프리마켓 마지막 가격 (21:30 KST 한 번) | `premarket_snapshot` |
+| 종목 | `symbols` | 미국 종목 목록, 한글명, 별칭 | `symbols_weekly` |
+| | `price_bars` | 종목 × 날짜 일봉 (2년) | `prices_daily`, `ai_daily`, 종목 상세 |
+| | `news_items` | 뉴스·8-K 제목, 한국어 번역, 중요도 | `stock_intel` |
+| | `earnings_facts` | 분기 실적 (SEC, % 단위) | `stock_intel`, 깊게 분석 |
+| | `congress_docs`, `congress_trades` | 하원 의원 거래 신고 문서와 거래 | `stock_intel` |
+| | `congress_members` | 현직 하원 의원 정당·지역구·위원회 | `stock_intel` (주 1회) |
+| | `stock_reports` | 깊게 분석 한 번 = 작업 하나. 입력(스크립트 계산값) jsonb + Claude 출력 jsonb + 토큰 | 종목 상세 버튼 |
+| 나 | `holdings`, `watchlist` | 보유(수량·평단·손절가·목표가·산 날)와 관심 | 내 종목 |
+| | `trades` | 샀음·팔았음 기록, 실현 손익 | 기록 |
+| | `my_equity` | 날짜별 내 계좌 가치 | `ai_daily` |
+| | `settings` | 키-값 (총 투자금 등) | 설정 |
+| AI 대결 | `ai_accounts` | 모의 계좌 (규칙 버전 v1·v2, 시작 자금, 현금, 마지막 처리일) | `ai_daily` |
+| | `ai_signals` | 계좌 × 날짜 × 종목 × 방향 신호, 체크리스트 jsonb, 조건부 매수가·손절가·목표가·수량, Claude 해설 | `ai_daily`, `commentary_daily` |
+| | `ai_positions` | 모의 포지션 (진입·청산·사유·손익, 본전 보호) | `ai_daily` |
+| | `ai_equity` | 계좌 × 날짜 계좌 가치 | `ai_daily` |
+
+초안에 있던 `themes`, `candidates`, `decisions`, `outcomes`는 아직 없다. `jobs`는 따로 두지 않고 `stock_reports`(깊게 분석)가 작업 기록을 겸한다. 복기(Phase 8)에서 `outcomes`를 만든다.
 
 `condition` 매핑: exposure-coach 판정 allow → 맑음, restrict → 흐림, cash_priority → 비. 실제 필드명은 스크립트 출력 JSON을 보고 확정한다.
 

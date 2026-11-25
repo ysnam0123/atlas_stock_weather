@@ -1,6 +1,6 @@
 "use client";
 
-import type { PriceBarRow } from "@atlas/contracts";
+import type { PriceBarRow, StockDetail } from "@atlas/contracts";
 import {
   CandlestickSeries,
   ColorType,
@@ -59,10 +59,11 @@ function sma(bars: PriceBarRow[], n: number) {
  * 종목 상세 차트: 일봉(정규장 종가 기준) + 거래량 + 50·200일선, 그 위에 계획 가격선(평단·손절가·조건부 매수가·VCP 피벗 등).
  * 가격선마다 오른쪽 축에 이름표가 붙어 색만으로 구분하지 않는다
  */
-export function PlanChart({ bars, lines }: { bars: PriceBarRow[]; lines: PlanLine[] }) {
+export function PlanChart({ bars, lines, levels = [] }: { bars: PriceBarRow[]; lines: PlanLine[]; levels?: StockDetail["levels"] }) {
   const box = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [range, setRange] = useState<(typeof RANGES)[number]["key"]>("6m");
+  const [showLevels, setShowLevels] = useState(true);
   const [hover, setHover] = useState<PriceBarRow | null>(null);
 
   useEffect(() => {
@@ -102,7 +103,11 @@ export function PlanChart({ bars, lines }: { bars: PriceBarRow[]; lines: PlanLin
       wickUpColor: up,
       wickDownColor: down,
       borderVisible: false,
-      priceLineVisible: false,
+      // 종가 가로선: 점선, 오른쪽 축에 종가 이름표
+      priceLineVisible: true,
+      priceLineStyle: LineStyle.Dotted,
+      priceLineColor: v("--color-text-secondary"),
+      priceLineWidth: 1,
     });
     candles.setData(bars.map((b) => ({ time: time(b.date), open: b.open, high: b.high, low: b.low, close: b.close })));
 
@@ -132,6 +137,20 @@ export function PlanChart({ bars, lines }: { bars: PriceBarRow[]; lines: PlanLin
       });
     }
 
+    // 지지·저항 가격대: 계획선보다 옅은 점선 (스크립트 계산)
+    if (showLevels) {
+      for (const l of levels) {
+        candles.createPriceLine({
+          price: l.price,
+          color: alpha(v(l.kind === "resistance" ? "--color-up" : "--color-down"), 0.55),
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: l.kind === "resistance" ? "저항" : "지지",
+        });
+      }
+    }
+
     const byTime = new Map(bars.map((b) => [time(b.date), b]));
     chart.subscribeCrosshairMove((p) => setHover(p.time ? (byTime.get(p.time as UTCTimestamp) ?? null) : null));
 
@@ -139,7 +158,7 @@ export function PlanChart({ bars, lines }: { bars: PriceBarRow[]; lines: PlanLin
       chart.remove();
       chartRef.current = null;
     };
-  }, [bars, lines]);
+  }, [bars, lines, levels, showLevels]);
 
   // 기간: 최근 N거래일을 보이게
   useEffect(() => {
@@ -147,7 +166,7 @@ export function PlanChart({ bars, lines }: { bars: PriceBarRow[]; lines: PlanLin
     if (!chart || !bars.length) return;
     const days = RANGES.find((r) => r.key === range)!.days;
     chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, bars.length - days), to: bars.length + 3 });
-  }, [range, bars, lines]);
+  }, [range, bars, lines, levels, showLevels]);
 
   const shown = hover ?? bars.at(-1);
 
@@ -195,6 +214,21 @@ export function PlanChart({ bars, lines }: { bars: PriceBarRow[]; lines: PlanLin
             {l.label} <span className="tabular-nums text-text">{usd(l.price)}</span>
           </li>
         ))}
+        {levels.length > 0 && (
+          <li>
+            <label className="inline-flex cursor-pointer items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showLevels}
+                onChange={(e) => setShowLevels(e.target.checked)}
+                className="size-3.5 accent-(--color-primary)"
+              />
+              <span className="h-0 w-4 border-t-2 border-dotted border-up" aria-hidden />
+              <span className="h-0 w-4 border-t-2 border-dotted border-down" aria-hidden />
+              지지·저항 {levels.length}개
+            </label>
+          </li>
+        )}
       </ul>
     </div>
   );
