@@ -10,9 +10,15 @@ export interface ClaudeResult<T> {
   inputTokens: number;
   outputTokens: number;
   costUsd: number | null;
+  /** Claude가 주고받은 횟수. 도구 없이 정상이면 2 (답 + 구조화 출력) */
+  turns: number;
+  /** 금지 표현 때문에 다시 쓰게 했으면 그 표현 */
+  rewrote?: string[];
 }
 
 const TIMEOUT_MS = 180_000;
+/** 도구 없는 호출이 스키마 검증 재시도로 길어지는 걸 막는다 (2026-11-25 신호 해설이 평소 7배 토큰) */
+const MAX_TURNS_NO_TOOLS = 4;
 
 export interface ClaudeInput {
   system: string;
@@ -92,7 +98,7 @@ export class ClaudeService {
       JSON.stringify(input.schema),
       '--tools',
       (input.tools ?? []).join(','),
-      ...(input.tools?.length ? ['--allowedTools', input.tools.join(',')] : []),
+      ...(input.tools?.length ? ['--allowedTools', input.tools.join(',')] : ['--max-turns', String(MAX_TURNS_NO_TOOLS)]),
       '--system-prompt',
       input.system,
       '--no-session-persistence',
@@ -128,6 +134,7 @@ export class ClaudeService {
       result?: string;
       structured_output?: T;
       total_cost_usd?: number;
+      num_turns?: number;
       usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
     };
     if (res.is_error || res.structured_output == null) {
@@ -140,6 +147,7 @@ export class ClaudeService {
       inputTokens: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
       outputTokens: u.output_tokens ?? 0,
       costUsd: res.total_cost_usd ?? null,
+      turns: res.num_turns ?? 0,
     };
   }
 
@@ -160,6 +168,8 @@ export class ClaudeService {
       inputTokens: first.inputTokens + second.inputTokens,
       outputTokens: first.outputTokens + second.outputTokens,
       costUsd: (first.costUsd ?? 0) + (second.costUsd ?? 0),
+      turns: first.turns + second.turns,
+      rewrote: bad,
     };
   }
 }

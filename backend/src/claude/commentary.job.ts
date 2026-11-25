@@ -9,7 +9,10 @@ export const COMMENTARY_DAILY = 'commentary_daily';
 const WATCH_LIMIT = 10;
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
-const pct1 = (r: number | null | undefined) => (r == null ? null : Math.round(r * 1000) / 10);
+/** run 기록용: 토큰이 튀었을 때 몇 턴이었는지, 다시 쓰기가 있었는지 나중에 볼 수 있게 */
+const usage = (r: { inputTokens: number; outputTokens: number; turns: number; rewrote?: string[] }) =>
+  `입력 ${r.inputTokens}, 출력 ${r.outputTokens} 토큰, ${r.turns}턴${r.rewrote ? `, 다시 쓰기: ${r.rewrote.join(',')}` : ''}`;
+const pct1 =(r: number | null | undefined) => (r == null ? null : Math.round(r * 1000) / 10);
 
 const CONDITION_KO: Record<string, string> = { clear: '맑음', cloudy: '흐림', rain: '비' };
 const BREADTH_KO: Record<string, string> = {
@@ -133,7 +136,7 @@ export class CommentaryJob {
           cost += r.costUsd ?? 0;
           tokensIn += r.inputTokens;
           tokensOut += r.outputTokens;
-          notes.push(`시장 해설 (입력 ${r.inputTokens}, 출력 ${r.outputTokens} 토큰)`);
+          notes.push(`시장 해설 (${usage(r)})`);
         } catch (err) {
           failed++;
           notes.push(`시장 해설 실패: ${String(err).slice(0, 200)}`);
@@ -158,7 +161,7 @@ export class CommentaryJob {
           cost += r.costUsd ?? 0;
           tokensIn += r.inputTokens;
           tokensOut += r.outputTokens;
-          notes.push(`신호 해설 ${valid.length}개 (입력 ${r.inputTokens}, 출력 ${r.outputTokens} 토큰)`);
+          notes.push(`신호 해설 ${valid.length}개 (${usage(r)})`);
         } catch (err) {
           failed++;
           notes.push(`신호 해설 실패: ${String(err).slice(0, 200)}`);
